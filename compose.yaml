@@ -1,0 +1,126 @@
+services:
+  # ==========================================
+  # 1. BASE DE DATOS Y ADMINISTRACIÓN
+  # ==========================================
+  db-primary:
+    image: postgres:16-alpine
+    container_name: db-primary
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tpFinal}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - db-primary
+    networks:
+      - app-network
+
+  # ==========================================
+  # 2. SISTEMA DE MONITOREO (PROMETHEUS Y EXPORTADORES)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - node-exporter
+      - cadvisor
+      - postgres-exporter
+    networks:
+      - app-network
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - app-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - app-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-admin}@db-primary:5432/${POSTGRES_DB:-tpFinal}?sslmode=disable"
+    depends_on:
+      - db-primary
+    networks:
+      - app-network
+
+  # ==========================================
+  # 3. NEXTCLOUD (SERVIDOR DE ARCHIVOS Y COLABORACIÓN)
+  # ==========================================
+
+  nextcloud-db:
+    image: postgres:17
+    shm_size: 2gb
+    environment:
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+    volumes:
+      - db-nextcloud:/var/lib/postgresql/data
+    networks:
+      - redtpfinal
+
+  nextcloud:
+    image: nextcloud:latest
+    ports:
+      - 8082:80
+    depends_on:
+      - nextcloud-db
+    environment:
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
+      - POSTGRES_USER=${NEXTCLOUD_DB_USER}
+      - POSTGRES_HOST=${NEXTCLOUD_DB_HOST}
+    volumes:
+      - nextcloud:/var/www/html
+    networks:
+      - redtpfinal
+      
+volumes:
+  pgdata:
+  prometheus_data:
+  nextcloud:
+  db-nextcloud:
+
+networks:
+  app-network:
+    driver: bridge
