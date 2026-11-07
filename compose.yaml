@@ -2,35 +2,41 @@ services:
   # ==========================================
   # 1. BASE DE DATOS Y ADMINISTRACIÓN
   # ==========================================
-  db-primary:
-    image: postgres:16-alpine
-    container_name: db-primary
+  postgres:
+    image: postgres:18.6
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tpFinal}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:?Completa el archivo .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Completa el archivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Completa el archivo .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql
     networks:
-      - app-network
+      - redtpfinal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
+    image: dpage/pgadmin4:9.19
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Completa el archivo .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Completa el archivo .env}
     ports:
-      - "5050:80"
-    depends_on:
-      - db-primary
+      - "127.0.0.1:5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     networks:
-      - app-network
+      - redtpfinal
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # ==========================================
-  # 2. SISTEMA DE MONITOREO (PROMETHEUS Y EXPORTADORES)
+  # 2. SISTEMA DE MONITOREO
   # ==========================================
   prometheus:
     image: prom/prometheus:latest
@@ -48,7 +54,7 @@ services:
       - cadvisor
       - postgres-exporter
     networks:
-      - app-network
+      - redtpfinal
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -56,7 +62,7 @@ services:
     ports:
       - "9100:9100"
     networks:
-      - app-network
+      - redtpfinal
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -69,7 +75,7 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     networks:
-      - app-network
+      - redtpfinal
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
@@ -77,16 +83,15 @@ services:
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-admin}@db-primary:5432/${POSTGRES_DB:-tpFinal}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
-      - db-primary
+      - postgres
     networks:
-      - app-network
+      - redtpfinal
 
   # ==========================================
-  # 3. NEXTCLOUD (SERVIDOR DE ARCHIVOS Y COLABORACIÓN)
+  # 3. NEXTCLOUD
   # ==========================================
-
   nextcloud-db:
     image: postgres:17
     shm_size: 2gb
@@ -114,13 +119,13 @@ services:
       - nextcloud:/var/www/html
     networks:
       - redtpfinal
-      
+
 volumes:
-  pgdata:
+  postgres18_data:
+  pgadmin_data:
   prometheus_data:
   nextcloud:
   db-nextcloud:
 
 networks:
-  app-network:
-    driver: bridge
+  redtpfinal:
