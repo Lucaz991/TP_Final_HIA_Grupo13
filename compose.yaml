@@ -125,12 +125,39 @@ services:
     networks:
       - redtpfinal
 
+
+  # ==========================================
+  # 4. GLPI
+  # ==========================================
+  glpi-db:
+    image: "mysql"
+    restart: "unless-stopped"
+    volumes:
+      - db_glpi:/var/lib/mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+
+  glpi:
+    image: "glpi/glpi:latest"
+    restart: "unless-stopped"
+    volumes:
+      - glpi_data:/var/glpi
+    depends_on:
+      - glpi-db
+    ports:
+      - "80:80"
+
 volumes:
   postgres18_data:
   pgadmin_data:
   prometheus_data:
   nextcloud:
   db-nextcloud:
+  glpi_data:
+  db-glpi:
 
 networks:
   redtpfinal:
