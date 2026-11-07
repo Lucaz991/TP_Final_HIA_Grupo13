@@ -1,6 +1,6 @@
 services:
   # ==========================================
-  # 1. BASE DE DATOS Y ADMINISTRACIÓN (Versión segura de develop)
+  # 1. BASE DE DATOS Y ADMINISTRACIÓN
   # ==========================================
   postgres:
     image: postgres:18.6
@@ -36,12 +36,11 @@ services:
         condition: service_healthy
 
   # ==========================================
-  # 2. SISTEMA DE MONITOREO (De main, adaptado a la nueva red)
+  # 2. SISTEMA DE MONITOREO
   # ==========================================
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
-    restart: always
     ports:
       - "9090:9090"
     volumes:
@@ -60,7 +59,6 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
-    restart: always
     ports:
       - "9100:9100"
     networks:
@@ -69,7 +67,6 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
-    restart: always
     ports:
       - "8080:8080"
     volumes:
@@ -83,14 +80,48 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres-exporter
-    restart: always
     ports:
       - "9187:9187"
     environment:
-      # Corregido: sin contraseñas por defecto y apuntando a 'postgres'
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGSSLMODE: disable
     depends_on:
       - postgres
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 3. NEXTCLOUD
+  # ==========================================
+  nextcloud-db:
+    image: postgres:17
+    shm_size: 2gb
+    environment:
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+    volumes:
+      - db-nextcloud:/var/lib/postgresql/data
+    networks:
+      - redtpfinal
+
+  nextcloud:
+    image: nextcloud:latest
+    ports:
+      - 8082:80
+    depends_on:
+      - nextcloud-db
+    environment:
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
+      - POSTGRES_USER=${NEXTCLOUD_DB_USER}
+      - POSTGRES_HOST=${NEXTCLOUD_DB_HOST}
+    volumes:
+      - nextcloud:/var/www/html
     networks:
       - redtpfinal
 
@@ -98,6 +129,8 @@ volumes:
   postgres18_data:
   pgadmin_data:
   prometheus_data:
+  nextcloud:
+  db-nextcloud:
 
 networks:
   redtpfinal:
