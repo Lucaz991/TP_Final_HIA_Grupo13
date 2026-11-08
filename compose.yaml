@@ -141,7 +141,7 @@ services:
       - redtpfinal
 
   # ==========================================
-  # 4. APLICACIÓN (Frontend y Backend) - PT-19
+  # 4. APLICACIÓN (Frontend y Backend)
   # ==========================================
   backend:
     build:
@@ -177,18 +177,50 @@ services:
       dockerfile: Dockerfile
     container_name: app-frontend
     ports:
-      - "80:80"
+      - "8081:80" 
     networks:
       - redtpfinal
     depends_on:
       - backend
 
+  # ==========================================
+  # 5. GLPI 
+  # ==========================================
+  glpi-db:
+    image: "mysql"
+    restart: "unless-stopped"
+    volumes:
+      - db-glpi:/var/lib/mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+    networks:
+      - redtpfinal
+
+  glpi:
+    image: "glpi/glpi:latest"
+    restart: "unless-stopped"
+    volumes:
+      - glpi_data:/var/glpi
+    depends_on:
+      - glpi-db
+    ports:
+      - "80:80"
+    networks:
+      - redtpfinal
+
+# declaracion global de los volúmenes para que Docker los pueda crear y gestionar automáticamente
 volumes:
   postgres18_data:
   pgadmin_data:
   prometheus_data:
   nextcloud:
   db-nextcloud:
+  glpi_data:
+  db-glpi:
 
+# declaracion global de la red
 networks:
   redtpfinal:
