@@ -20,6 +20,21 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-replica:
+    image: postgres:18.6
+    container_name: postgres-replica
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5434:5432" # Puerto corregido que se acordó usar
+    networks:
+      - redtpfinal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   pgadmin:
     image: dpage/pgadmin4:9.19
     environment:
@@ -124,6 +139,49 @@ services:
       - nextcloud:/var/www/html
     networks:
       - redtpfinal
+
+  # ==========================================
+  # 4. APLICACIÓN (Frontend y Backend) - PT-19
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: app-backend
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    networks:
+      - redtpfinal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app-frontend
+    ports:
+      - "80:80"
+    networks:
+      - redtpfinal
+    depends_on:
+      - backend
 
 volumes:
   postgres18_data:
