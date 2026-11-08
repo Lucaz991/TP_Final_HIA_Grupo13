@@ -28,7 +28,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "127.0.0.1:5434:5432" # Puerto corregido que se acordó usar
+      - "127.0.0.1:5434:5432" 
     networks:
       - redtpfinal
     depends_on:
@@ -211,7 +211,7 @@ services:
     networks:
       - redtpfinal
 
-# declaracion global de los volúmenes para que Docker los pueda crear y gestionar automáticamente
+# declaracion global de los volúmenes
 volumes:
   postgres18_data:
   pgadmin_data:
