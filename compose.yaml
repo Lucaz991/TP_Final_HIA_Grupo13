@@ -57,7 +57,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"    # antes "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -74,8 +74,7 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
-    ports:
-      - "9100:9100"
+    # Se QUITÓ la sección ports completa (solo acceso interno)
     networks:
       - redtpfinal
 
@@ -83,7 +82,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"    # antes "8080:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -95,8 +94,7 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres-exporter
-    ports:
-      - "9187:9187"
+    # Se QUITÓ la sección ports completa (solo acceso interno)
     environment:
       PGUSER: ${POSTGRES_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD}
@@ -127,7 +125,7 @@ services:
   nextcloud:
     image: nextcloud:latest
     ports:
-      - 8082:80
+      - "127.0.0.1:8082:80"      # antes "8082:80"
     depends_on:
       - nextcloud-db
     environment:
@@ -149,7 +147,7 @@ services:
       dockerfile: Dockerfile
     container_name: app-backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"    # antes "3000:3000"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -177,7 +175,7 @@ services:
       dockerfile: Dockerfile
     container_name: app-frontend
     ports:
-      - "8081:80" 
+      - "127.0.0.1:8081:80"      # antes "8081:80"
     networks:
       - redtpfinal
     depends_on:
@@ -207,7 +205,7 @@ services:
     depends_on:
       - glpi-db
     ports:
-      - "80:80"
+      - "127.0.0.1:8083:80"      # antes "80:80"
     networks:
       - redtpfinal
 
@@ -287,10 +285,12 @@ services:
       sandbox-api:
         condition: service_healthy
     ports:
-      - '5678:5678' # the only port that should be internet-facing
+      - "127.0.0.1:5678:5678" # the only port that should be internet-facing
     env_file: .env
     volumes:
       - n8n-data:/home/node/.n8n
+    networks:           # AGREGAR — estaba faltando
+      - redtpfinal 
 
   runners:
     image: ghcr.io/n8n-io/runners:${N8N_VERSION}
