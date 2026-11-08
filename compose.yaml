@@ -20,6 +20,21 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-replica:
+    image: postgres:18.6
+    container_name: postgres-replica
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5434:5432" 
+    networks:
+      - redtpfinal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   pgadmin:
     image: dpage/pgadmin4:9.19
     environment:
@@ -125,20 +140,64 @@ services:
     networks:
       - redtpfinal
 
+  # ==========================================
+  # 4. APLICACIÓN (Frontend y Backend)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: app-backend
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    networks:
+      - redtpfinal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app-frontend
+    ports:
+      - "8081:80" 
+    networks:
+      - redtpfinal
+    depends_on:
+      - backend
 
   # ==========================================
-  # 4. GLPI
+  # 5. GLPI 
   # ==========================================
   glpi-db:
     image: "mysql"
     restart: "unless-stopped"
     volumes:
-      - db_glpi:/var/lib/mysql
+      - db-glpi:/var/lib/mysql
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${GLPI_DB_NAME}
       MYSQL_USER: ${GLPI_DB_USER}
       MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+    networks:
+      - redtpfinal
 
   glpi:
     image: "glpi/glpi:latest"
@@ -149,7 +208,10 @@ services:
       - glpi-db
     ports:
       - "80:80"
+    networks:
+      - redtpfinal
 
+# declaracion global de los volúmenes
 volumes:
   postgres18_data:
   pgadmin_data:
@@ -159,5 +221,6 @@ volumes:
   glpi_data:
   db-glpi:
 
+# declaracion global de la red
 networks:
   redtpfinal:
