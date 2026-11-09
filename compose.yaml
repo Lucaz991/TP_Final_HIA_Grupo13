@@ -2,38 +2,125 @@ services:
   # ==========================================
   # 1. BASE DE DATOS Y ADMINISTRACIÓN
   # ==========================================
-  postgres:
-    image: postgres:18.6
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    container_name: cluster_etcd
+    command: 
+      - etcd
+      - --name=etcd
+      - --data-dir=/etcd_data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd=http://etcd:2380
+      - --initial-cluster-state=new 
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Completa el archivo .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Completa el archivo .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Completa el archivo .env}
-    ports:
-      - "127.0.0.1:5433:5432"
+      - ALLOW_NONE_AUTHENTICATION=yes
     volumes:
-      - postgres18_data:/var/lib/postgresql
+      - etcd_data:/etcd_data
     networks:
       - redtpfinal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
-  postgres-replica:
-    image: postgres:18.6
-    container_name: postgres-replica
+  node1:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    container_name: db_node1
+    env_file: .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
+      PATRONI_NAME: node1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node1:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node1:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5434:5432" 
+    volumes:
+      - node1_data:/var/lib/postgresql/data
     networks:
       - redtpfinal
     depends_on:
-      postgres:
-        condition: service_healthy
+      - etcd
+
+  node2:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    container_name: db_node2
+    env_file: .env
+    environment:
+      PATRONI_NAME: node2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node2:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node2:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - node2_data:/var/lib/postgresql/data
+    networks:
+      - redtpfinal
+    depends_on:
+      - etcd
+
+  node3:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    container_name: db_node3
+    env_file: .env
+    environment:
+      PATRONI_NAME: node3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node3:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node3:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - node3_data:/var/lib/postgresql/data
+    networks:
+      - redtpfinal
+    depends_on:
+      - etcd
+
+  proxy:
+    image: haproxy:2.9-alpine
+    container_name: cluster_proxy
+    ports:
+      - "127.0.0.1:${DB_PROXY_PORT:-5465}:5465"
+      - "127.0.0.1:7000:7000"
+    volumes:
+      - ./db/cluster/config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      redtpfinal:
+        aliases:
+          - postgres
+          - proxy
+          - haproxy
+    depends_on:
+      - node1
+      - node2
+      - node3
 
   pgadmin:
     image: dpage/pgadmin4:9.19
@@ -47,8 +134,7 @@ services:
     networks:
       - redtpfinal
     depends_on:
-      postgres:
-        condition: service_healthy
+      - proxy
 
   # ==========================================
   # 2. SISTEMA DE MONITOREO
@@ -57,7 +143,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     ports:
-      - "127.0.0.1:9090:9090"    # antes "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -74,15 +160,16 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
-    # Se QUITÓ la sección ports completa (solo acceso interno)
+    ports:
+      - "127.0.0.1:9100:9100"
     networks:
       - redtpfinal
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
-    # Sin ports: solo acceso interno por redtpfinal
-    # PENDIENTE: consultar al equipo si se expone en puerto fuera del rango reservado
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -94,7 +181,8 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres-exporter
-    # Se QUITÓ la sección ports completa (solo acceso interno)
+    ports:
+      - "127.0.0.1:9187:9187"
     environment:
       PGUSER: ${POSTGRES_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD}
@@ -103,7 +191,7 @@ services:
       PGPORT: 5432
       PGSSLMODE: disable
     depends_on:
-      - postgres
+      - proxy
     networks:
       - redtpfinal
 
@@ -125,7 +213,7 @@ services:
   nextcloud:
     image: nextcloud:latest
     ports:
-      - "127.0.0.1:8082:80"      # antes solo "8082:80"  
+      - "127.0.0.1:8082:80"
     depends_on:
       - nextcloud-db
     environment:
@@ -147,7 +235,7 @@ services:
       dockerfile: Dockerfile
     container_name: app-backend
     ports:
-      - "127.0.0.1:3000:3000"    # antes "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -166,8 +254,7 @@ services:
     networks:
       - redtpfinal
     depends_on:
-      postgres:
-        condition: service_healthy
+      - proxy
 
   frontend:
     build:
@@ -175,7 +262,7 @@ services:
       dockerfile: Dockerfile
     container_name: app-frontend
     ports:
-      - "127.0.0.1:8081:80"      # antes solo "8081:80"  
+      - "127.0.0.1:8081:80"
     networks:
       - redtpfinal
     depends_on:
@@ -205,106 +292,103 @@ services:
     depends_on:
       - glpi-db
     ports:
-      - "127.0.0.1:8083:80"      # antes "80:80"  
+      - "127.0.0.1:80:80"
     networks:
       - redtpfinal
 
   # ==========================================
   # 6. N8N
   # ==========================================
-  # PENDIENTE DE DEFINIR CON EL EQUIPO:
-  # Los servicios sandbox (sandbox-certs, sandbox-api, sandbox-runner-1, runners)
-  # quedan COMENTADOS hasta definir si se necesitan para los flujos del TP.
-  # Requieren variables faltantes en .env (SANDBOX_API_KEYS, N8N_SANDBOX_VERSION,
-  # N8N_RUNNERS_AUTH_TOKEN). n8n funciona standalone sin ellos.
+  sandbox-certs:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
+    user: '0:0'
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api
+        --control-san-prefix sandbox-runner --world-readable &&
+        chown -R sandbox-api:sandbox-api /tls/api && chmod -R a+rX /tls
+    environment:
+      NUM_RUNNERS: '1'
+    volumes:
+      - sandbox-tls:/tls
+    networks:
+      - redtpfinal
 
-  # sandbox-certs:
-  #   image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
-  #   user: '0:0'
-  #   entrypoint: ['sh', '-c']
-  #   command:
-  #     - >
-  #       bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api
-  #       --control-san-prefix sandbox-runner --world-readable &&
-  #       chown -R sandbox-api:sandbox-api /tls/api && chmod -R a+rX /tls
-  #   environment:
-  #     NUM_RUNNERS: '1'
-  #   volumes:
-  #     - sandbox-tls:/tls
-  #   networks:
-  #     - redtpfinal
+  sandbox-api:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
+    depends_on:
+      sandbox-certs:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      SANDBOX_API_GRPC_TLS_CERT_FILE: /tls/api/grpc-server.crt
+      SANDBOX_API_GRPC_TLS_KEY_FILE: /tls/api/grpc-server.key
+      SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/api/control-grpc-api-client.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/api/control-grpc-api-client.key
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME: sandbox-runner-1
+    volumes:
+      - sandbox-tls:/tls:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - redtpfinal
 
-  # sandbox-api:
-  #   image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
-  #   depends_on:
-  #     sandbox-certs:
-  #       condition: service_completed_successfully
-  #   env_file: .env
-  #   environment:
-  #     SANDBOX_API_GRPC_TLS_CERT_FILE: /tls/api/grpc-server.crt
-  #     SANDBOX_API_GRPC_TLS_KEY_FILE: /tls/api/grpc-server.key
-  #     SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE: /tls/api/ca.crt
-  #     SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE: /tls/api/ca.crt
-  #     SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/api/control-grpc-api-client.crt
-  #     SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/api/control-grpc-api-client.key
-  #     SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME: sandbox-runner-1
-  #   volumes:
-  #     - sandbox-tls:/tls:ro
-  #   healthcheck:
-  #     test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/healthz']
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 5
-  #     start_period: 10s
-  #   networks:
-  #     - redtpfinal
-
-  # sandbox-runner-1:
-  #   image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:${N8N_SANDBOX_VERSION}
-  #   privileged: true
-  #   depends_on:
-  #     sandbox-api:
-  #       condition: service_healthy
-  #   env_file: .env
-  #   environment:
-  #     SANDBOX_RUNNER_API_GRPC_ADDR: sandbox-api:9090
-  #     SANDBOX_RUNNER_HTTP_BASE_URL: https://sandbox-runner-1:8080
-  #     SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR: ':9091'
-  #     SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR: sandbox-runner-1:9091
-  #     SANDBOX_RUNNER_ID: runner-1
-  #     SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE: ghcr.io/n8n-io/n8n-sandbox-service-sandbox:${N8N_SANDBOX_VERSION}
-  #     SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE: /tls/runner/ca.crt
-  #     SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE: /tls/runner/grpc-client.crt
-  #     SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE: /tls/runner/grpc-client.key
-  #     SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME: sandbox-api
-  #     SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/runner/control-grpc-server.crt
-  #     SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/runner/control-grpc-server.key
-  #     SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE: /tls/runner/ca.crt
-  #   volumes:
-  #     - sandbox-tls:/tls:ro
-  #   networks:
-  #     - redtpfinal
+  sandbox-runner-1:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:${N8N_SANDBOX_VERSION}
+    privileged: true
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      SANDBOX_RUNNER_API_GRPC_ADDR: sandbox-api:9090
+      SANDBOX_RUNNER_HTTP_BASE_URL: https://sandbox-runner-1:8080
+      SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR: ':9091'
+      SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR: sandbox-runner-1:9091
+      SANDBOX_RUNNER_ID: runner-1
+      SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE: ghcr.io/n8n-io/n8n-sandbox-service-sandbox:${N8N_SANDBOX_VERSION}
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE: /tls/runner/ca.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE: /tls/runner/grpc-client.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE: /tls/runner/grpc-client.key
+      SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME: sandbox-api
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/runner/control-grpc-server.crt
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/runner/control-grpc-server.key
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE: /tls/runner/ca.crt
+    volumes:
+      - sandbox-tls:/tls:ro
+    networks:
+      - redtpfinal
 
   n8n:
     image: docker.io/n8nio/n8n:${N8N_VERSION}
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
     ports:
-      - "127.0.0.1:5678:5678" # solo acceso localhost (publicar via tunel si se decide)
+      - '127.0.0.1:5678:5678' # Puerto para acceder a la interfaz web de n8n
     env_file: .env
     volumes:
       - n8n-data:/home/node/.n8n
-    networks:           # AGREGADO — estaba faltando
+    networks:
       - redtpfinal
 
-  # runners:
-  #   image: ghcr.io/n8n-io/runners:${N8N_VERSION}
-  #   depends_on:
-  #     - n8n
-  #   environment:
-  #     N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
-  #     N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
-  #     N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: '15'
-  #   networks:
-  #     - redtpfinal
+  runners:
+    image: ghcr.io/n8n-io/runners:${N8N_VERSION}
+    depends_on:
+      - n8n
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: '15'
+    networks:
+      - redtpfinal
 
   searxng:
     image: ghcr.io/searxng/searxng:latest
@@ -317,6 +401,10 @@ services:
 
 # declaracion global de los volúmenes
 volumes:
+  node1_data:
+  node2_data:
+  node3_data:
+  etcd_data:
   postgres18_data:
   pgadmin_data:
   prometheus_data:
