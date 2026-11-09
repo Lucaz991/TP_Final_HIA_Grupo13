@@ -1,13 +1,19 @@
-# PT-15 · Piloto del dataset de tutorías
+# Datasets de prueba
 
-El piloto genera 1.000 tutorías sintéticas en PostgreSQL. Incluye 200 pendientes, 100 aceptadas, 100 rechazadas y 600 finalizadas con pago simulado. Aproximadamente dos tercios de las finalizadas reciben una calificación sintética. La carga de al menos 6 millones de filas por tabla seleccionada queda pendiente
+## PT-23 · Carga de seis millones de tutorías
+
+La carga masiva y sus instrucciones están en [6M/README.md](6M/README.md). Incluye generación por lotes, verificación, registro de tiempos y resultados de la ejecución. La tabla seleccionada para el requisito de seis millones es `tutorias`.
+
+## PT-15 · Piloto del dataset de tutorías
+
+El piloto genera 1.000 tutorías sintéticas en PostgreSQL. Incluye 200 pendientes, 100 aceptadas, 100 rechazadas y 600 finalizadas con pago simulado. Aproximadamente dos tercios de las finalizadas reciben una calificación sintética. Se conserva como antecedente de la carga masiva implementada en PT-23.
 ## Requisitos
 
 - PostgreSQL levantado con Docker Compose y acceso a `tpFinal` desde pgAdmin.
 - Esquema y datos iniciales cargados, con la tabla `tutorias` vacía.
 - Al menos un alumno activo y un profesor activo con una asignación activa en `profesores_categorias`.
 
-Como el backend todavia `sequelize.sync({ force: true })`, cada arranque recrea las tablas y borra el piloto. Inicializá el esquema antes de cargar los datos y evitá reiniciar el backend contra esta base mientras estés conservando la carga.(Cambio pendiente)
+El backend utiliza `sequelize.sync()` para conservar las tablas existentes. Inicializá el esquema antes de cargar los datos y mantené el backend detenido durante las mediciones. Este piloto requiere `tutorias` vacía y se ejecuta antes de una carga masiva.
 
 ## Orden de carga
 

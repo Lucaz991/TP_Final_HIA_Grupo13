@@ -101,7 +101,7 @@ const seedProfesorCategorias = require('./src/seeders/profesoresCategorias.seed.
 const seedAdmin = require('./src/seeders/admin.seed.js');
 
 
-sequelize.sync({ force: true })
+sequelize.sync()
     .then(async () => {
         console.log('Tablas de PostgreSQL sincronizadas');
 
