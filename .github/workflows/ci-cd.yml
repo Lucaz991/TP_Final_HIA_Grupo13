@@ -1,0 +1,20 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ "develop", "main" ]
+
+jobs:
+  build-and-verify:
+    name: Construcción de Imágenes
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name:  Obtener el código
+        uses: actions/checkout@v4
+
+      - name:  Validar construcción del Backend
+        run: docker build -t app-backend-test ./backend
+
+      - name:  Validar construcción del Frontend
+        run: docker build -t app-frontend-test ./frontend
