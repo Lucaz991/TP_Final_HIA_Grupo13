@@ -105,7 +105,6 @@ services:
 
   proxy:
     image: haproxy:2.9-alpine
-    container_name: cluster_proxy
     ports:
       - "127.0.0.1:${DB_PROXY_PORT:-5465}:5465"
       - "127.0.0.1:7000:7000"
@@ -167,9 +166,8 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
-    container_name: cadvisor
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -199,7 +197,7 @@ services:
   # 3. NEXTCLOUD
   # ==========================================
   nextcloud-db:
-    image: postgres:17
+    image: postgres:18
     shm_size: 2gb
     environment:
       POSTGRES_USER: ${NEXTCLOUD_DB_USER}
