@@ -1,6 +1,6 @@
 -- PT-23 - Asignaciones profesor-categoría.
 -- Cuatro categorías distintas por profesor sintético.
--- Primer lote: profesores 1 a 10000.
+-- Ejecutar por rangos de hasta 25000 profesores.
 
 BEGIN;
 
@@ -32,9 +32,10 @@ BEGIN
         WHERE desde < 1
            OR hasta > 100000
            OR hasta < desde
-           OR hasta - desde + 1 > 10000
+           OR hasta - desde + 1 > 25000
     ) THEN
-        RAISE EXCEPTION 'Rango inválido.';
+        RAISE EXCEPTION
+            'Rango inválido. Usar entre 1 y 100000, hasta 25000 por ejecución.';
     END IF;
 END;
 $rango$;
@@ -49,7 +50,7 @@ CROSS JOIN LATERAL
     generate_series(rango.desde, rango.hasta) AS serie(numero)
 JOIN public.usuarios usuario
     ON usuario.email =
-        'profesor.' || serie.numero || '@example.invalid'
+        'profesor.' || serie.numero || '@example.com'
 WHERE usuario.rol = 'profesor'
   AND usuario.estado = 'activo';
 
@@ -78,8 +79,9 @@ BEGIN
             'Faltan profesores del rango o tienen rol/estado incorrecto.';
     END IF;
 
-    IF (SELECT COUNT(*) FROM pt23_categorias) < 4 THEN
-        RAISE EXCEPTION 'Se necesitan al menos cuatro categorías.';
+    IF (SELECT COUNT(*) FROM pt23_categorias) <> 100 THEN
+        RAISE EXCEPTION
+            'Se requieren las 100 categorías del catálogo antes de generar asignaciones.';
     END IF;
 END;
 $requisitos$;

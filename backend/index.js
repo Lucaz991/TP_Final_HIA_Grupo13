@@ -92,32 +92,23 @@ app.use('/api/chat', require('./src/routes/chat.route'));
 //Configuracion del puerto 
 app.set('port', process.env.PORT || 3000);
 
-const seedPrecios = require('./src/seeders/precios.seed.js')
-const seedCategorias = require('./src/seeders/categorias.seed.js');
-
-const seedUsuarios = require('./src/seeders/usuarios.seed.js');
-const seedProfesorCategorias = require('./src/seeders/profesoresCategorias.seed.js');
-//const seedHorarios = require('./src/seeders/horariosDisponibles.seed.js');
-const seedAdmin = require('./src/seeders/admin.seed.js');
-
-
+// Los datos iniciales se cargan mediante los scripts SQL.
 sequelize.sync()
-    .then(async () => {
+    .then(() => {
         console.log('Tablas de PostgreSQL sincronizadas');
 
-        //  datos precargados
-        await seedPrecios();
-        await seedCategorias();
-        await seedUsuarios();
-        await seedProfesorCategorias();
-        //await seedHorarios();
-        await seedAdmin();
-
-        app.listen(app.get('port'), () => { // Arranca el servidor 
-            console.log(`Server started on port`, app.get('port'));
+        app.listen(app.get('port'), () => {
+            console.log(
+                'Servidor iniciado en el puerto',
+                app.get('port')
+            );
         });
     })
     .catch(err => {
-        console.error('No se pudo iniciar el servidor debido a un error en la BD:', err);
-    });
+        console.error(
+            'No se pudo iniciar el servidor debido a un error en la BD:',
+            err
+        );
 
+        process.exitCode = 1;
+    });
