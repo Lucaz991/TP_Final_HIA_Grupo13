@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 80,
+  "EndLine": 80,
+  "StartColumn": 14,
+  "EndColumn": 47,
+  "Match": "token: 'eyJhbGciOiJIUzI1NiIsIn...'",
+  "Secret": "eyJhbGciOiJIUzI1NiIsIn...",
+  "File": "backend/swagger.js",
+  "SymlinkFile": "",
+  "Commit": "6a851369c728a531ca04360d8d402bbe2b65ec6a",
+  "Link": "https://github.com/Lucaz991/TP_Final_HIA_Grupo13/blob/6a851369c728a531ca04360d8d402bbe2b65ec6a/backend/swagger.js#L80",
+  "Entropy": 3.863465,
+  "Author": "Lucas Zerpa",
+  "Email": "lenkagamine268@gmail.com",
+  "Date": "2026-11-03T01:23:40Z",
+  "Message": "Estructura unificada inicial del proyecto HIA",
+  "Tags": [],
+  "Fingerprint": "6a851369c728a531ca04360d8d402bbe2b65ec6a:backend/swagger.js:generic-api-key:80"
+ }
+]
