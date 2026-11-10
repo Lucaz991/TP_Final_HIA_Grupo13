@@ -1,7 +1,8 @@
 -- Usuarios del dataset.
 -- Dos administradores y hasta 100000 alumnos y profesores.
 -- Completar un hash bcrypt por rol. Compartir las contraseñas por separado.
--- Ejecutar por rangos de hasta 10000 números.
+-- Carga definitiva en cuatro rangos de 25000 números por rol.
+-- Rangos: 1-25000, 25001-50000, 50001-75000 y 75001-100000.
 
 BEGIN;
 
@@ -35,7 +36,7 @@ $destino$;
 CREATE TEMP TABLE usuarios_config ON COMMIT DROP AS
 SELECT
     1::integer AS desde,
-    10000::integer AS hasta,
+    25000::integer AS hasta,
     '$2b$10$DA6GO0ktoJhv/SStxn4mn.ryG06TzCajsPTuVEr3.h4Jv3kfCETZW'::text AS hash_admin,
     '$2b$10$n0mVPZ1/h.FslNpiDqOHJ.KvH0llzo/mtgMetXgewM3oZzvvLSCqe'::text AS hash_profesor,
     '$2b$10$acdmx4hRCVICI4kzWmd69OUCfSE7VBlOCekLl57vv.RCAL9w6TNfi'::text AS hash_alumno;
@@ -48,10 +49,10 @@ BEGIN
         WHERE desde < 1
            OR hasta > 100000
            OR hasta < desde
-           OR hasta - desde + 1 > 10000
+           OR hasta - desde + 1 > 25000
     ) THEN
         RAISE EXCEPTION
-            'Rango inválido. Usar entre 1 y 100000, hasta 10000 por ejecución.';
+            'Rango inválido. Usar entre 1 y 100000, hasta 25000 por ejecución.';
     END IF;
 
     IF EXISTS (

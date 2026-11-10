@@ -4,7 +4,13 @@
 
 La carga masiva y sus instrucciones están en [6M/README.md](6M/README.md). La tabla seleccionada para el requisito de seis millones es `tutorias`. Los scripts cargan desde un esquema vacío 100 categorías, 10 tarifas, dos administradores, 100.000 alumnos, 100.000 profesores, 400.000 asignaciones y 400.000 horarios, antes de generar las tutorías.
 
-La ejecución del 9 al 10 de noviembre de 2026 confirmó mediante capturas 6.000.000 de tutorías, 200.002 usuarios, 100 categorías y 400.000 asignaciones. El tamaño final medido fue 1.469.463.575 bytes, informado por PostgreSQL como `1401 MB`. El README de la carga distingue los resultados observados, las evidencias pendientes y la primera ejecución histórica.
+La carga de usuarios se realiza en cuatro lotes de 25.000 alumnos y 25.000 profesores. Los rangos son 1–25000, 25001–50000, 50001–75000 y 75001–100000. Los dos administradores se crean en el primero y se conservan en los siguientes. Asignaciones y horarios admiten las mismas cuatro tandas. Tutorías se carga en seis lotes de un millón.
+
+El calendario actual abarca del 3 de enero de 2022 al 16 de noviembre de 2026, en hora argentina. La distribución anual prevista es 600.000, 900.000, 1.200.000, 1.500.000 y 1.800.000 tutorías. Los profesores se distribuyen en 20.000 de mañana, 35.000 de tarde y 45.000 de noche, con cuatro horarios semanales por profesor.
+
+Las capturas de la versión actual compartidas el 10 de noviembre de 2026 registran un tamaño final de `tpFinal` de 1.442.061.335 bytes, informado por PostgreSQL como `1375 MB`. El valor inicial antes de cargar tutorías fue 175.555.087 bytes y el crecimiento fue 1.266.506.248 bytes. El detalle de las seis tablas y sus índices está en [el README de la carga](6M/README.md#tamaño-actual-de-tablas-e-índices).
+
+Una ejecución anterior del 9 al 10 de noviembre de 2026 confirmó mediante capturas 6.000.000 de tutorías, 200.002 usuarios, 100 categorías y 400.000 asignaciones. Su tamaño final fue 1.469.463.575 bytes, informado por PostgreSQL como `1401 MB`. Esas mediciones preceden a los cambios de calendario y turnos. La documentación separa esos resultados históricos de las mediciones actuales y las evidencias pendientes.
 
 Ejecutar primero `00_restriccion_precios.sql`, después `01_prevalidacion.sql` y luego `01_catalogos.sql`. Continuar con usuarios, asignaciones, horarios, tutorías y verificación según el orden documentado. Los dos archivos con prefijo `01` requieren respetar ese orden manual. La prevalidación registra el estado inicial y consulta relaciones. Antes de una nueva carga se debe confirmar además que las tablas y los controles quedaron vacíos.
 

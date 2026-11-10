@@ -1,6 +1,7 @@
 -- Horarios disponibles del dataset.
 -- Cuatro franjas semanales por profesor.
 -- Ejecutar por rangos de hasta 25000 profesores.
+-- Turnos por número de profesor: 20 % mañana, 35 % tarde y 45 % noche.
 
 BEGIN;
 
@@ -18,11 +19,13 @@ BEGIN
 END;
 $destino$;
 
--- Cambiar estos valores para cada lote.
+-- Cambiar el rango para cada lote y conservar profesores_totales.
+-- Definitiva: 100000. Piloto: 1000, con rango 1 a 1000.
 CREATE TEMP TABLE horarios_config ON COMMIT DROP AS
 SELECT
     1::integer AS desde,
-    25000::integer AS hasta;
+    25000::integer AS hasta,
+    100000::integer AS profesores_totales;
 
 DO $rango$
 BEGIN
@@ -33,9 +36,11 @@ BEGIN
            OR hasta > 100000
            OR hasta < desde
            OR hasta - desde + 1 > 25000
+           OR profesores_totales NOT IN (1000, 100000)
+           OR hasta > profesores_totales
     ) THEN
         RAISE EXCEPTION
-            'Rango inválido. Usar entre 1 y 100000, hasta 25000 por ejecución.';
+            'Usar un rango de hasta 25000 profesores dentro del total configurado (1000 o 100000).';
     END IF;
 END;
 $rango$;
@@ -80,11 +85,24 @@ SELECT
     profesor.profesor_id,
     dias.dia::public."enum_horarios_disponibles_diaSemana"
         AS dia_semana,
-    time '09:00' AS hora_inicio,
-    time '13:00' AS hora_fin,
+    CASE
+        WHEN profesor.numero <= configuracion.profesores_totales / 5
+            THEN time '09:00'
+        WHEN profesor.numero <= configuracion.profesores_totales * 55 / 100
+            THEN time '14:00'
+        ELSE time '19:00'
+    END AS hora_inicio,
+    CASE
+        WHEN profesor.numero <= configuracion.profesores_totales / 5
+            THEN time '13:00'
+        WHEN profesor.numero <= configuracion.profesores_totales * 55 / 100
+            THEN time '18:00'
+        ELSE time '23:00'
+    END AS hora_fin,
     'ambas'::public.enum_horarios_disponibles_modalidad
         AS modalidad
 FROM profesores_horarios profesor
+CROSS JOIN horarios_config configuracion
 CROSS JOIN (
     VALUES ('lunes'), ('martes'), ('jueves'), ('viernes')
 ) AS dias(dia);

@@ -3,7 +3,9 @@
 -- Definitiva: 100000 usuarios por rol y seis lotes de 1000000 tutorías.
 -- Destino: tpFinal.
 -- Requiere usuarios @example.com, asignaciones, tarifas y horarios cargados.
--- Sesiones de una hora, de 09:00 a 10:00, durante 15 semanas.
+-- Sesiones de una hora en el turno de cada profesor.
+-- Turnos: 20 % mañana, 35 % tarde y 45 % noche.
+-- Distribución creciente entre 2022 y el 16 de noviembre de 2026.
 -- Mantener el backend detenido durante la carga.
 
 BEGIN;
@@ -55,7 +57,7 @@ CREATE TABLE IF NOT EXISTS pt23_dataset.configuracion (
     id integer PRIMARY KEY CHECK (id = 1),
     usuarios_por_rol integer NOT NULL CHECK (usuarios_por_rol IN (1000, 100000)),
     registros_por_lote integer NOT NULL,
-    version_generador integer NOT NULL CHECK (version_generador = 2),
+    version_generador integer NOT NULL CHECK (version_generador = 3),
     CHECK (registros_por_lote = usuarios_por_rol * 10)
 );
 
@@ -92,7 +94,7 @@ BEGIN
         CROSS JOIN pt23_config solicitada
         WHERE guardada.usuarios_por_rol <> solicitada.usuarios_por_rol
            OR guardada.registros_por_lote <> solicitada.registros_por_lote
-           OR guardada.version_generador <> 2
+           OR guardada.version_generador <> 3
     ) THEN
         RAISE EXCEPTION
             'La configuración difiere de la ejecución iniciada. Preparar una base limpia para cambiar entre piloto y definitiva.';
@@ -111,10 +113,18 @@ BEGIN
 END;
 $compatibilidad$;
 
+-- Adaptar el control vacío de una versión anterior sin aceptar sus lotes.
+ALTER TABLE pt23_dataset.configuracion
+    DROP CONSTRAINT IF EXISTS configuracion_version_generador_check;
+
+ALTER TABLE pt23_dataset.configuracion
+    ADD CONSTRAINT configuracion_version_generador_check
+        CHECK (version_generador = 3);
+
 INSERT INTO pt23_dataset.configuracion (
     id, usuarios_por_rol, registros_por_lote, version_generador
 )
-SELECT 1, usuarios_por_rol, registros_por_lote, 2
+SELECT 1, usuarios_por_rol, registros_por_lote, 3
 FROM pt23_config
 ON CONFLICT (id) DO NOTHING;
 
@@ -261,7 +271,13 @@ CREATE UNIQUE INDEX
 ANALYZE pt23_horarios;
 
 DO $horarios$
+DECLARE
+    cantidad_profesores integer;
 BEGIN
+    SELECT usuarios_por_rol
+    INTO cantidad_profesores
+    FROM pt23_config;
+
     IF EXISTS (
         SELECT profesor.id
         FROM pt23_usuarios profesor
@@ -274,14 +290,28 @@ BEGIN
                 WHERE horario.dia_semana IN (
                     'lunes', 'martes', 'jueves', 'viernes'
                 )
-                  AND horario.hora_inicio = time '09:00'
-                  AND horario.hora_fin = time '13:00'
+                  AND horario.hora_inicio =
+                      CASE
+                          WHEN profesor.numero <= cantidad_profesores / 5
+                              THEN time '09:00'
+                          WHEN profesor.numero <= cantidad_profesores * 55 / 100
+                              THEN time '14:00'
+                          ELSE time '19:00'
+                      END
+                  AND horario.hora_fin =
+                      CASE
+                          WHEN profesor.numero <= cantidad_profesores / 5
+                              THEN time '13:00'
+                          WHEN profesor.numero <= cantidad_profesores * 55 / 100
+                              THEN time '18:00'
+                          ELSE time '23:00'
+                      END
                   AND horario.modalidad = 'ambas'
                   AND horario.estado = 'activo'
             ) <> 4
     ) THEN
         RAISE EXCEPTION
-            'Cada profesor debe tener los cuatro horarios activos definidos para el dataset.';
+            'Cada profesor debe tener los cuatro horarios activos correspondientes a su turno.';
     END IF;
 END;
 $horarios$;
@@ -432,28 +462,79 @@ BEGIN
     JOIN public.precios tarifa
         ON tarifa.nivel::text = categoria.nivel::text
        AND tarifa.modalidad::text = base.modalidad
+    -- Distribuir las 60 rondas entre los cinco años.
+    CROSS JOIN LATERAL (
+        SELECT
+            CASE
+                WHEN base.ronda < 6 THEN 2022
+                WHEN base.ronda < 15 THEN 2023
+                WHEN base.ronda < 27 THEN 2024
+                WHEN base.ronda < 42 THEN 2025
+                ELSE 2026
+            END AS anio,
+            CASE
+                WHEN base.ronda < 6 THEN base.ronda
+                WHEN base.ronda < 15 THEN base.ronda - 6
+                WHEN base.ronda < 27 THEN base.ronda - 15
+                WHEN base.ronda < 42 THEN base.ronda - 27
+                ELSE base.ronda - 42
+            END AS ronda_anual,
+            CASE
+                WHEN base.ronda < 6 THEN 6
+                WHEN base.ronda < 15 THEN 9
+                WHEN base.ronda < 27 THEN 12
+                WHEN base.ronda < 42 THEN 15
+                ELSE 18
+            END AS rondas_anuales,
+            CASE WHEN base.ronda < 42 THEN 12 ELSE 11 END
+                AS meses_disponibles
+    ) distribucion
+    CROSS JOIN LATERAL (
+        SELECT
+            make_date(
+                distribucion.anio,
+                1 + (
+                    distribucion.ronda_anual
+                    * distribucion.meses_disponibles
+                    / distribucion.rondas_anuales
+                )::integer,
+                1
+            ) AS inicio_mes,
+            -- La última ronda corresponde al lunes 16/11/2026.
+            CASE
+                WHEN base.ronda = 59 THEN 1
+                ELSE (
+                    ARRAY[1, 2, 4, 5]
+                )[1 + (base.ronda % 4)::integer]
+            END AS dia_objetivo,
+            (base.ronda % 4) * interval '1 hour'
+                AS desplazamiento
+    ) calendario
     JOIN pt23_horarios horario
         ON horario.profesor_id = asignacion.profesor_id
        AND horario.dia_semana =
-           CASE base.ronda % 4
-               WHEN 0 THEN 'lunes'
-               WHEN 1 THEN 'martes'
-               WHEN 2 THEN 'jueves'
+           CASE calendario.dia_objetivo
+               WHEN 1 THEN 'lunes'
+               WHEN 2 THEN 'martes'
+               WHEN 4 THEN 'jueves'
                ELSE 'viernes'
            END
     CROSS JOIN LATERAL (
         SELECT
             (
-                timestamp '2026-01-05 09:00:00'
-                + (base.ronda / 4) * interval '7 days'
-                + (
-                    CASE base.ronda % 4
-                        WHEN 0 THEN 0
-                        WHEN 1 THEN 1
-                        WHEN 2 THEN 3
-                        ELSE 4
-                    END
-                ) * interval '1 day'
+                (
+                    calendario.inicio_mes
+                    + CASE WHEN base.ronda = 59 THEN 14 ELSE 0 END
+                    + (
+                        (
+                            calendario.dia_objetivo
+                            - EXTRACT(
+                                ISODOW FROM calendario.inicio_mes
+                            )::integer
+                            + 7
+                        ) % 7
+                    )
+                ) + horario.hora_inicio + calendario.desplazamiento
             ) AT TIME ZONE 'America/Argentina/Buenos_Aires'
             AS fecha
     ) fechas;

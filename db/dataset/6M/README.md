@@ -21,9 +21,9 @@ Cada instalación local tiene su propia base. Para reproducir el dataset se ejec
 | [00_restriccion_precios.sql](00_restriccion_precios.sql) | Una vez. Comprueba duplicados y asegura una tarifa por nivel y modalidad. Admite repetir su ejecución. |
 | [01_prevalidacion.sql](01_prevalidacion.sql) | Una vez antes de generar datos. Guardar conteos, tamaño inicial y resultados de integridad. |
 | [01_catalogos.sql](01_catalogos.sql) | Después de la prevalidación. Carga 100 categorías y 10 tarifas. |
-| [02_usuarios.sql](02_usuarios.sql) | Completar los tres hashes bcrypt con costo 10, uno por rol. Piloto con rango 1–1000. Definitiva con los diez rangos siguientes. Las dos cuentas admin se conservan por email único. |
+| [02_usuarios.sql](02_usuarios.sql) | Utilizar los tres hashes bcrypt con costo 10, uno por rol, y conservarlos durante la ejecución. Piloto con rango 1–1000. Definitiva con los cuatro rangos de 25.000 siguientes. Las dos cuentas admin se conservan por email único. |
 | [03_asignaciones.sql](03_asignaciones.sql) | Después de cargar los usuarios. Utilizar las cuatro tandas de hasta 25.000 profesores indicadas abajo. Genera cuatro categorías por profesor y requiere exactamente 100 categorías. |
-| [04_horarios.sql](04_horarios.sql) | Después de cargar los usuarios. Utilizar las cuatro tandas de hasta 25.000 profesores. Genera cuatro franjas activas por profesor, lunes, martes, jueves y viernes de 09:00 a 13:00, modalidad ambas. |
+| [04_horarios.sql](04_horarios.sql) | Después de cargar los usuarios. Utilizar las cuatro tandas de hasta 25.000 profesores y `profesores_totales = 100000`. Genera cuatro franjas activas por profesor, lunes, martes, jueves y viernes, modalidad ambas, en el turno que corresponde a su número de email. |
 | [05_tutorias.sql](05_tutorias.sql) | Configurar el modo y ejecutar seis veces, cambiando `lote` de 1 a 6. |
 | [06_verificacion_final.sql](06_verificacion_final.sql) | Ejecutar los cinco `ANALYZE` como bloque separado. Después ejecutar individualmente las consultas numeradas. Las cantidades esperadas se obtienen de la configuración persistida. |
 
@@ -39,33 +39,20 @@ Cada instalación local tiene su propia base. Para reproducir el dataset se ejec
 | Horarios | 4000 | 400000 |
 | Tutorías | 60000 | 6000000 |
 
-El generador de tutorías está guardado en modo definitivo, con `lote = 1`, `usuarios_por_rol = 100000` y `registros_por_lote = 1000000`. Mantener sus parámetros durante los seis lotes y cambiar únicamente `lote`. Para el piloto se usan `usuarios_por_rol = 1000` y `registros_por_lote = 10000`. Usuarios, asignaciones y horarios se ejecutan una vez con rango 1–1000 en ese modo.
+El generador de tutorías está guardado en modo definitivo, con `lote = 1`, `usuarios_por_rol = 100000` y `registros_por_lote = 1000000`. Mantener sus parámetros durante los seis lotes y cambiar únicamente `lote`. Para el piloto se usan `usuarios_por_rol = 1000` y `registros_por_lote = 10000`. Usuarios, asignaciones y horarios se ejecutan una vez con rango 1–1000 en ese modo. En horarios configurar también `profesores_totales = 1000` para conservar las proporciones de los tres turnos.
 
 Para una nueva ejecución, comprobar el piloto y el login con una cuenta de cada rol antes de preparar la definitiva. El generador rechaza cambiar de modo sobre una ejecución iniciada y los controles anteriores sin versión. La preparación de una base vacía requiere un respaldo y una limpieza manual explícita de las tablas de la aplicación y de `pt23_dataset.configuracion`, `pt23_dataset.ejecucion` y `pt23_dataset.lotes`. Estos scripts conservan los datos al repetirse y no incluyen una limpieza automática. La ejecución del piloto y las pruebas de login de la versión actual todavía requieren evidencias propias.
 
-| Ejecución de usuarios | Desde | Hasta |
-|---|---:|---:|
-| 1 | 1 | 10000 |
-| 2 | 10001 | 20000 |
-| 3 | 20001 | 30000 |
-| 4 | 30001 | 40000 |
-| 5 | 40001 | 50000 |
-| 6 | 50001 | 60000 |
-| 7 | 60001 | 70000 |
-| 8 | 70001 | 80000 |
-| 9 | 80001 | 90000 |
-| 10 | 90001 | 100000 |
-
-Para asignaciones y horarios se recomienda esta distribución. Cada tanda genera hasta 100.000 filas en cada tabla.
-
-| Tanda de asignaciones u horarios | Desde | Hasta |
+| Lote de usuarios, asignaciones u horarios | Desde | Hasta |
 |---|---:|---:|
 | 1 | 1 | 25000 |
 | 2 | 25001 | 50000 |
 | 3 | 50001 | 75000 |
 | 4 | 75001 | 100000 |
 
-El archivo de asignaciones está guardado con rango 1–10000 y admite hasta 25.000 profesores. Cambiar `hasta` a 25000 para seguir esta tabla desde la primera tanda. Horarios está guardado con rango 1–25000. Si un rango ya fue procesado, se puede completar el siguiente tramo o repetirlo manteniendo estables los catálogos y las cuentas. Los hashes deben conservarse exactamente durante todas las ejecuciones de usuarios.
+Cada lote de usuarios agrega hasta 25.000 alumnos y 25.000 profesores. El primer lote crea además los dos administradores. Los siguientes conservan esas cuentas por su email único. Desde una base vacía los totales acumulados son 50.002, 100.002, 150.002 y 200.002 usuarios. Cada tanda de asignaciones u horarios genera hasta 100.000 filas en su tabla.
+
+Usuarios y horarios están guardados con rango 1–25000. El archivo de asignaciones está guardado con rango 1–10000 y admite hasta 25.000 profesores. Cambiar `hasta` a 25000 para seguir la tabla desde la primera tanda. Completar primero los usuarios antes de generar asignaciones y horarios. Si un rango ya fue procesado, se puede completar el siguiente tramo o repetirlo manteniendo estables los catálogos y las cuentas. Los hashes deben conservarse exactamente durante todas las ejecuciones de usuarios. Cambiar el tamaño de lote del archivo no modifica las cuentas que ya están cargadas.
 
 Esperar la finalización de cada ejecución antes de iniciar la siguiente. Ante un error, ejecutar `ROLLBACK;` en la misma pestaña antes de volver a usarla. Registrar también el tiempo total informado por pgAdmin.
 
@@ -79,7 +66,33 @@ Las categorías se numeran por ID y cada profesor recibe cuatro categorías dife
 
 Las tutorías se generan mediante 60 rondas de la cantidad configurada de alumnos, agrupadas en seis transacciones. Una permutación distribuye los profesores y una rotación selecciona sus categorías. Al completar cualquiera de los modos, cada alumno y profesor sintético participa en 60 tutorías y cada categoría asignada a un profesor se utiliza 15 veces.
 
-Las fechas abarcan del 5 de enero al 17 de abril de 2026, con sesiones de una hora desde las 09:00, interpretadas en la zona `America/Argentina/Buenos_Aires`. Los días coinciden con los cuatro horarios semanales y cada participante tiene una sola tutoría por fecha. El importe es la tarifa horaria del nivel de la categoría y la modalidad. Los mensajes alternan entre cinco textos. Las tutorías virtuales aceptadas o finalizadas incluyen enlaces como `https://meet.example.com/123456` y un identificador de evento ficticio. Las finalizadas incluyen identificadores de preferencia y pago ficticios. Los campos de las tutorías nuevas carecen del texto `pt23`.
+### Turnos y fechas del generador actual
+
+Cada profesor tiene cuatro franjas, los lunes, martes, jueves y viernes. El número de su email determina su turno. Las cantidades siguientes corresponden a la carga definitiva.
+
+| Turno | Números de profesor | Profesores | Franja | Horarios |
+|---|---|---:|---|---:|
+| Mañana | 1–20000 | 20.000 | 09:00–13:00 | 80.000 |
+| Tarde | 20001–55000 | 35.000 | 14:00–18:00 | 140.000 |
+| Noche | 55001–100000 | 45.000 | 19:00–23:00 | 180.000 |
+| Total | 1–100000 | 100.000 | | 400.000 |
+
+El piloto conserva las proporciones con 200 profesores de mañana, 350 de tarde y 450 de noche. Las sesiones duran una hora y comienzan al inicio de la franja del profesor o una, dos o tres horas después. La sesión más tardía es de 22:00 a 23:00.
+
+Las fechas locales abarcan del 3 de enero de 2022 al 16 de noviembre de 2026, inclusive, en la zona `America/Argentina/Buenos_Aires`.
+
+| Año | Rondas | Tutorías definitivas | Tutorías del piloto |
+|---|---:|---:|---:|
+| 2022 | 6 | 600.000 | 6.000 |
+| 2023 | 9 | 900.000 | 9.000 |
+| 2024 | 12 | 1.200.000 | 12.000 |
+| 2025 | 15 | 1.500.000 | 15.000 |
+| 2026 | 18 | 1.800.000 | 18.000 |
+| Total | 60 | 6.000.000 | 60.000 |
+
+Las rondas se reparten entre meses de cada año y utilizan fechas compatibles con los días de disponibilidad. Las primeras 59 rondas se concentran en la primera semana de los meses seleccionados. La última ronda utiliza el lunes 16 de noviembre de 2026. Hay 60 fechas distintas, cada una con 100.000 tutorías en la carga definitiva. El lote 6 contiene diez fechas, de mayo a noviembre de 2026, y solo sus últimas 100.000 tutorías corresponden al 16 de noviembre. Cada participante tiene una sola tutoría por fecha.
+
+El importe es la tarifa horaria del nivel de la categoría y la modalidad. Los mensajes alternan entre cinco textos. Las tutorías virtuales aceptadas o finalizadas incluyen enlaces como `https://meet.example.com/123456` y un identificador de evento ficticio. Las finalizadas incluyen identificadores de preferencia y pago ficticios. Los campos de las tutorías nuevas carecen del texto `pt23`.
 
 Los identificadores `INTEGER` se conservan porque admiten hasta 2.147.483.647 valores positivos, por encima del volumen de esta prueba. Las cancelaciones y los conflictos pueden consumir números de secuencia y dejar saltos válidos.
 
@@ -87,13 +100,75 @@ Los identificadores `INTEGER` se conservan porque admiten hasta 2.147.483.647 va
 
 `05_tutorias.sql` crea el esquema auxiliar `pt23_dataset` y las tablas `configuracion`, `ejecucion` y `lotes`. Guardan el modo y la versión del generador, el punto de partida de la carga y la cantidad y duración por lote, respectivamente.
 
+La versión actual del control es 3. Los datos y controles de versiones anteriores requieren preparación explícita antes de una carga nueva. El último ajuste del 5 al 16 de noviembre afecta únicamente a la ronda 59. Si los primeros cinco lotes se generaron con los tres turnos y el rango 2022–2026, sus fechas se conservan al ejecutar el lote 6 con el archivo actualizado. Un lote 6 ya confirmado se omite al repetirlo. Cambiar el archivo no actualiza tutorías existentes.
+
 Las tutorías y el registro de su lote se confirman dentro de la misma transacción. Si un lote ya figura como confirmado, se omite su inserción. Esta comprobación presupone conservar tanto los datos como las tablas de control. Para iniciar otro dataset desde cero hace falta planificar explícitamente su limpieza.
 
 Tras una desconexión, reconectar mediante el proxy, comprobar el líder y consultar `pt23_dataset.lotes`. Si el lote no aparece, verificar que la sesión anterior haya terminado antes de repetirlo. El script emplea un bloqueo asesor para serializar sus ejecuciones.
 
 Los seis registros de lotes se comparan con el conteo real de `tutorias` mediante la consulta 2 de la verificación. Al finalizar, `coincide` y `completo` deben devolver `true`. Si se eliminan tutorías manualmente pero se conservan los controles, repetir un lote confirmado seguirá omitiéndolo.
 
-## Resultados de la carga definitiva del 9 al 10 de noviembre de 2026
+## Evidencias de la versión actual
+
+El responsable comunicó la regeneración de horarios y el avance de los lotes con los tres turnos. El cambio final al 16 de noviembre se incorporó antes de ejecutar el lote 6. Las capturas de tamaños compartidas el 10 de noviembre de 2026 confirman las mediciones siguientes. Queda pendiente adjuntar las salidas finales de cantidades, distribución anual, turnos, integridad y tiempos de esta versión. Los resultados conservados más abajo bajo el título de carga anterior corresponden a otras ejecuciones.
+
+### Tamaño final de la base actual
+
+| Medición | Bytes |
+|---|---:|
+| Base antes de cargar tutorías | 175.555.087 |
+| Base al finalizar | 1.442.061.335 |
+| Crecimiento | 1.266.506.248 |
+
+PostgreSQL informó `1375 MB` como tamaño final de `tpFinal`. La medición inicial corresponde al comienzo de la generación de tutorías, después de cargar los datos de apoyo. El crecimiento se obtiene restando ese valor al tamaño final. `pg_database_size` mide una copia de la base y los archivos de sus relaciones, sin sumar las réplicas ni el WAL del clúster.
+
+### Tamaño actual de tablas e índices
+
+| Tabla | Tabla y almacenamiento auxiliar, bytes | Índices, bytes | Total, bytes | Total informado por PostgreSQL |
+|---|---:|---:|---:|---|
+| `categorias` | 49.152 | 32.768 | 81.920 | 80 kB |
+| `horarios_disponibles` | 27.344.896 | 9.003.008 | 36.347.904 | 35 MB |
+| `precios` | 8.192 | 32.768 | 40.960 | 40 kB |
+| `profesores_categorias` | 30.154.752 | 20.070.400 | 50.225.152 | 48 MB |
+| `tutorias` | 1.131.454.464 | 134.840.320 | 1.266.294.784 | 1208 MB |
+| `usuarios` | 58.466.304 | 21.905.408 | 80.371.712 | 77 MB |
+
+Los valores proceden de `pg_table_size`, `pg_indexes_size` y `pg_total_relation_size`. El tamaño completo de la base incluye además otras relaciones y archivos del catálogo, por lo que puede superar la suma de estas seis tablas. Las unidades legibles se conservan tal como las muestra PostgreSQL.
+
+Además de las consultas de `06_verificacion_final.sql`, guardar estas salidas para verificar el calendario y los turnos actuales.
+
+```sql
+SELECT
+    MIN("fechaHora") AT TIME ZONE 'America/Argentina/Buenos_Aires'
+        AS primera_tutoria,
+    MAX("fechaHora") AT TIME ZONE 'America/Argentina/Buenos_Aires'
+        AS ultima_tutoria
+FROM public.tutorias;
+
+SELECT
+    EXTRACT(
+        YEAR FROM "fechaHora" AT TIME ZONE 'America/Argentina/Buenos_Aires'
+    )::integer AS anio,
+    COUNT(*) AS tutorias
+FROM public.tutorias
+GROUP BY 1
+ORDER BY 1;
+
+SELECT
+    "horaInicio",
+    "horaFin",
+    COUNT(DISTINCT "profesorId") AS profesores,
+    COUNT(*) AS horarios
+FROM public.horarios_disponibles
+GROUP BY "horaInicio", "horaFin"
+ORDER BY "horaInicio";
+```
+
+Comparar con las tablas de distribución anteriores. La última sesión esperada comienza el 16 de noviembre de 2026 a las 22:00 de Argentina y termina a las 23:00. En UTC su inicio corresponde al 17 de noviembre a la 01:00. Usar la conversión de zona indicada para validar el límite por fecha local.
+
+## Resultados de la carga anterior del 9 al 10 de noviembre de 2026
+
+Estas capturas preceden a la ampliación del calendario a 2022–2026 y a la distribución de profesores en tres turnos. Se conservan como mediciones de esa ejecución y deben complementarse con las de la versión actual.
 
 La captura del registro de lotes muestra seis lotes de 1.000.000 confirmados. Las capturas de consultas a las tablas confirman los siguientes conteos. Las marcas de tiempo del registro están expresadas en UTC. El inicio visible fue el 10 de noviembre a las 02:26 UTC y el fin a las 03:08 UTC, equivalentes al 9 de noviembre a las 23:26 y al 10 a las 00:08 en Argentina.
 
@@ -169,9 +244,9 @@ Los resultados siguientes proceden de las salidas de pgAdmin compartidas durante
 
 | Tabla | Registros finales |
 |---|---:|
-| `usuarios` | 200.014 |
-| `categorias` | 51 |
-| `profesores_categorias` | 400.014 |
+| `usuarios` | 200.000 |
+| `categorias` | 100 |
+| `profesores_categorias` | 400.000 |
 | `tutorias` | 6.000.000 |
 
 El conteo previo comunicado para categorías fue 55. La captura final muestra 51 y es la referencia utilizada en este documento. La causa de esa diferencia queda pendiente de identificar.
