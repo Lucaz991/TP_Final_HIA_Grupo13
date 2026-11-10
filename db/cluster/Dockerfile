@@ -1,4 +1,4 @@
-FROM postgres:16
+FROM postgres:18
 
 # Instalación de dependencias y Patroni con soporte etcd3
 RUN apt update \
