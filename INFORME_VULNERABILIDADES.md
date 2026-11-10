@@ -12,11 +12,11 @@
 | **Trivy** | 0.76.2 | Escaneo de imágenes Docker (OS + paquetes) | ✅ Ejecutado |
 | **npm audit** | npm 10.x | Dependencias Node.js (backend/frontend) | ✅ Ejecutado |
 | `docker compose ps` | — | Evidencia de bind `127.0.0.1` en puertos | ✅ Ejecutado |
-| OWASP ZAP | — | Escaneo DAST de la aplicación | ⏳ Pendiente (manual) |
+| **OWASP ZAP** | 2.17.0 | Escaneo DAST de la aplicación | ✅ Ejecutado — 9 alertas |
 | **Gitleaks** | 8.30.1 | Secretos en historial Git | ✅ Ejecutado — 1 falso positivo |
 | Docker Bench Security | — | Benchmark CIS de Docker | ⚠️ No compatible WSL2 — revisión manual realizada |
-| sqlmap | — | Prueba controlada SQLi | ⏳ Pendiente |
-| nmap | — | Mapa de puertos expuestos | ⏳ Pendiente |
+| **sqlmap** | 1.10.11 | Prueba controlada SQLi | ✅ Ejecutado — NO inyectable |
+| nmap | — | Mapa de puertos expuestos | ⏳ Opcional (evidencia cubierta por compose ps) |
 
 ---
 
@@ -177,19 +177,63 @@ Archivos de evidencia: `backend/audit-backend.json`, `frontend/audit-frontend.js
 
 ---
 
-## 6. Pendientes
+## 5d. Escaneo DAST — OWASP ZAP 2.17.0 (baseline, `http://localhost:8081`)
 
-- [ ] OWASP ZAP baseline scan → `http://localhost:8081`
-- [ ] Gitleaks sobre historial git (incidente documentable)
-- [ ] Docker Bench Security (CIS)
-- [ ] sqlmap — prueba controlada SQLi en endpoint parametrizado
-- [ ] nmap — evidencia formal de puertos
-- [ ] Upgrade `haproxy:2.9-alpine` → `3.0-alpine` (crash EOL)
-- [ ] Remediación `npm audit fix` controlada en branch dedicada
-- [ ] Rotación de secretos expuestos en historial
+**Resultado: 9 alertas — 3 MEDIUM, 2 LOW, 4 INFO**
+
+| Alerta | Riesgo | Detalle | Fix sugerido |
+|--------|--------|---------|--------------|
+| CSP no configurada (4) | MEDIUM | Sin Content Security Policy → permite XSS/inyección de scripts | Agregar header `Content-Security-Policy` en `nginx.conf` |
+| Integridad de recursos secundarios (4) | MEDIUM | Recursos CDN sin `integrity` hash → MITM podría inyectar JS modificado | Agregar `integrity` a `<script>`/`<link>` externos |
+| Anti-Clickjacking (4) | MEDIUM | Sin `X-Frame-Options`/`frame-ancestors` → iframe embedding permite clickjacking | Header `X-Frame-Options: DENY` en nginx |
+| Librería JS vulnerable | MEDIUM | Una lib JS con CVEs conocidos | Actualizar dependencia (pendiente identificar cuál) |
+| X-Content-Type-Options faltante | LOW | Sin `nosniff` → MIME sniffing | Header `X-Content-Type-Options: nosniff` |
+| Divulgación timestamp Unix | LOW | Info leakage mínimo | Aceptado |
+| Versión servidor expuesta | LOW | `Server: nginx/1.31.8` → fingerprinting | `server_tokens off` en nginx |
+| JS cross-domain (4) | INFO | Referencias externas (Google, etc.) | Aceptado |
+| Aplicación Web Moderna (4) | INFO | Angular detectado | Informativo |
+
+**Remediación priorizada:** los 3 MEDIUM se mitigan agregando headers de seguridad en `frontend/nginx.conf` (rama de fix separada — ver sección 6).
+
+---
+
+## 5e. Prueba controlada SQLi — sqlmap 1.10.11
+
+**Target:** `GET /api/categoria/:id` — endpoint público con parámetro de path usado en query a la DB.
+
+**Comando:**
+```powershell
+sqlmap -u "http://localhost:8081/api/categoria/1*" --batch --level=1 --risk=1 \
+  --technique=BEU --threads=4 --timeout=10 --retries=1
+```
+
+**Resultado: NO inyectable** ✅
+
+- sqlmap probó técnicas boolean-based, error-based y UNION en el parámetro `id`
+- Detectó el parámetro como dinámico pero **no injectable**
+- 49 respuestas HTTP 500 durante la prueba: el backend manejó los payloads maliciosos devolviendo JSON genérico `{"status":0,"msg":"Error al obtener categoría"}` — **sin leak de errores SQL ni stacktraces**
+- Causa raíz: Sequelize parametriza las queries (no concatena strings SQL)
+
+**Conclusión:** la capa de acceso a datos es resistente a SQLi básico. Para pruebas más profundas se requeriría `--level=5` y bypasses avanzados (fuera de alcance para este TP).
+
+---
+
+## 6. Pendientes — remediación (rama de fix dedicada)
+
+- [ ] **Headers de seguridad en `nginx.conf`** — CSP, X-Frame-Options, nosniff, server_tokens off (resuelve 3 MEDIUM de ZAP)
+- [ ] **Upgrade `haproxy:2.9-alpine` → `3.0-alpine`** — crash EOL documentado
+- [ ] **`npm audit fix` controlada** en branch dedicada (backend 12, frontend 47)
+- [ ] **`integrity` en recursos CDN** del frontend (resuelve MEDIUM SRI de ZAP)
+- [ ] **`read_only: true` + `tmpfs`** en servicios stateless (CIS)
+- [ ] **Pinnear imágenes** — evitar `:latest` en prometheus/cadvisor/etc (reproducibilidad)
+- [ ] Rotación de secrets del `.env` anterior (fuera de scope de código)
 
 ---
 
 ## 7. Resumen ejecutivo
 
-El stack presenta **superficie de ataque reducida**: solo el frontend es alcanzable desde Internet (vía túnel HTTPS), los 12 servicios restantes están bindeados a `127.0.0.1`. Las vulnerabilidades identificadas se concentran en **dependencias transitivas** (npm packages) e **imágenes base** (Debian/Alpine), no en código propio. Los 2 hallazgos críticos de runtime (sync destructivo, secrets en historial) están en proceso de remediación.
+El stack presenta **superficie de ataque reducida**: solo el frontend es alcanzable desde Internet (vía túnel HTTPS), los 12 servicios restantes están bindeados a `127.0.0.1`. Las vulnerabilidades identificadas se concentran en **dependencias transitivas** (npm packages) e **imágenes base** (Debian/Alpine), no en código propio.
+
+El escaneo DAST de ZAP confirmó que la aplicación carece de headers de seguridad (3 MEDIUM mitigables en `nginx.conf`) pero la lógica de acceso a datos es **resistente a SQLi** (sqlmap: no inyectable — Sequelize parametriza correctamente).
+
+El repositorio está **limpio de secretos** (gitleaks: solo falso positivo en documentación Swagger). Los 2 hallazgos críticos operativos detectados durante el despliegue (crash de HAProxy EOL y `sync({force:true})` destructivo) fueron remediados o documentados para el equipo.

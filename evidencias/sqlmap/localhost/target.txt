@@ -1,0 +1,1 @@
+http://localhost:8081/api/categoria/1* (GET)  # C:\Python315\Scripts\sqlmap -u http://localhost:8081/api/categoria/1* --batch --level=1 --risk=1 --technique=BEU --threads=4 --timeout=10 --retries=1 --output-dir=evidencias/sqlmap
