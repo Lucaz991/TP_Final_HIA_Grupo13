@@ -26,11 +26,14 @@ autenticacionCtrl.signUpUsuario = async (req, res) => {
          description: 'Usuario registrado correctamente.',
          schema: { $ref: '#/definitions/SuccessResponse' }
        }
-       #swagger.responses[400] = { description: 'El email ya está registrado.' }
+       #swagger.responses[400] = { description: 'Datos inválidos, rol no permitido o email ya registrado.' }
        #swagger.responses[500] = { description: 'Error al registrar usuario.' }
     */
     try {
         const data = req.body;
+        if (!['alumno', 'profesor'].includes(data.rol)) {
+            return res.status(400).json({ status: 0, msg: 'El rol debe ser alumno o profesor.' });
+        }
 
         const existe = await Usuario.findOne({
             where: {
@@ -150,10 +153,14 @@ autenticacionCtrl.signUpGoogle = async (req, res) => {
          description: 'Usuario registrado correctamente.',
          schema: { $ref: '#/definitions/SuccessResponse' }
        }
+       #swagger.responses[400] = { description: 'El rol debe ser alumno o profesor.' }
        #swagger.responses[500] = { description: 'Error al registrar usuario.' }
     */
     try {
         const data = req.body;
+        if (!['alumno', 'profesor'].includes(data.rol)) {
+            return res.status(400).json({ status: 0, msg: 'El rol debe ser alumno o profesor.' });
+        }
 
         // Verificar que el token realmente proviene de Google
         const ticket = await client.verifyIdToken({
