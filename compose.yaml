@@ -3,7 +3,7 @@ services:
   # 1. BASE DE DATOS Y ADMINISTRACIÓN
   # ==========================================
   etcd:
-    image: quay.io/coreos/etcd:v3.5.0
+    image: quay.io/coreos/etcd:v3.5.35
     command: 
       - etcd
       - --name=etcd
@@ -19,7 +19,7 @@ services:
     volumes:
       - etcd_data:/etcd_data
     networks:
-      - redtpfinal
+      - red-patroni
 
   node1:
     build:
@@ -44,7 +44,7 @@ services:
     volumes:
       - node1_data:/var/lib/postgresql/data
     networks:
-      - redtpfinal
+      - red-patroni
     depends_on:
       - etcd
 
@@ -71,7 +71,7 @@ services:
     volumes:
       - node2_data:/var/lib/postgresql/data
     networks:
-      - redtpfinal
+      - red-patroni
     depends_on:
       - etcd
 
@@ -98,12 +98,12 @@ services:
     volumes:
       - node3_data:/var/lib/postgresql/data
     networks:
-      - redtpfinal
+      - red-patroni
     depends_on:
       - etcd
 
   proxy:
-    image: haproxy:2.9-alpine
+    image: haproxy:3.4.5-alpine
     ports:
       - "127.0.0.1:${DB_PROXY_PORT:-5465}:5465"
       - "127.0.0.1:7000:7000"
@@ -115,6 +115,7 @@ services:
           - postgres
           - proxy
           - haproxy
+      red-patroni:
     depends_on:
       - node1
       - node2
@@ -144,6 +145,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -151,7 +153,9 @@ services:
     depends_on:
       - node-exporter
       - cadvisor
-      - postgres-exporter
+      - postgres-exporter-node1
+      - postgres-exporter-node2
+      - postgres-exporter-node3
     networks:
       - redtpfinal
 
@@ -175,20 +179,53 @@ services:
     networks:
       - redtpfinal
 
-  postgres-exporter:
+  # 3 Exporters individuales para monitorear cada nodo del clúster
+  postgres-exporter-node1:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres-exporter
-    ports:
-      - "127.0.0.1:9187:9187"
+    container_name: postgres_exporter_node1
     environment:
-      PGUSER: ${POSTGRES_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      PGDATABASE: ${POSTGRES_DB}
-      PGHOST: postgres
-      PGPORT: 5432
-      PGSSLMODE: disable
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node1:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
-      - proxy
+      - node1
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  postgres-exporter-node2:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter_node2
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node2:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      - node2
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  postgres-exporter-node3:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter_node3
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node3:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      - node3
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
     networks:
       - redtpfinal
 
@@ -411,7 +448,10 @@ volumes:
   db-glpi:
   n8n-data:
   sandbox-tls:
+  grafana_data:
 
 # declaracion global de la red
 networks:
   redtpfinal:
+  red-patroni:
+    internal: true
