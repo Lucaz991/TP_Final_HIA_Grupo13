@@ -1,0 +1,38 @@
+﻿groups:
+  - name: cluster_postgres_alerts
+    rules:
+      - alert: PostgresNodeDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nodo PostgreSQL caido"
+          description: "El nodo {{ $labels.instance }} del cluster Patroni no responde desde hace mas de 30 segundos."
+
+      - alert: PostgresHighConnections
+        expr: (sum by (instance) (pg_stat_activity_count) / 500) * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Conexiones elevadas en base de datos"
+          description: "El uso de conexiones activas en {{ $labels.instance }} supera el 80% del limite (max_connections=500)."
+
+      - alert: HostHighCpuUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso de CPU alto en el servidor"
+          description: "La CPU supera el umbral del 85% durante mas de 2 minutos."
+
+      - alert: HostLowMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memoria RAM baja en el servidor"
+          description: "La memoria disponible es menor al 15% del total."
