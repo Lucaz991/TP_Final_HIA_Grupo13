@@ -37,6 +37,16 @@
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": false
+                },
+                "fonts": {
+                  "inline": true
+                }
+              },
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",
