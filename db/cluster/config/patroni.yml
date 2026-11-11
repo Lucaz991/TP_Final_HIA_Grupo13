@@ -34,7 +34,7 @@ postgresql:
   listen: 0.0.0.0:5432
   connect_address: ${PATRONI_NAME}:5432
   data_dir: /var/lib/postgresql/data
-  bin_dir: /usr/lib/postgresql/16/bin
+  bin_dir: /usr/lib/postgresql/18/bin
   authentication:
     replication:
       username: ${DB_REPL_USER}
