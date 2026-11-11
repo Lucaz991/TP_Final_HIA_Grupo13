@@ -1,0 +1,136 @@
+﻿{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "ESTADO DE LOS NODOS DEL CLÚSTER (POSTGRESQL)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "CAÍDO (DOWN)" }, "1": { "color": "green", "text": "ACTIVO (UP)" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "pluginVersion": "10.0.0",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "editorMode": "code", "expr": "pg_up{node=\"node1\"}", "legendFormat": "Estado Node 1", "range": true, "refId": "A" }],
+      "title": "Salud Node 1",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "CAÍDO (DOWN)" }, "1": { "color": "green", "text": "ACTIVO (UP)" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "pluginVersion": "10.0.0",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "editorMode": "code", "expr": "pg_up{node=\"node2\"}", "legendFormat": "Estado Node 2", "range": true, "refId": "A" }],
+      "title": "Salud Node 2",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "CAÍDO (DOWN)" }, "1": { "color": "green", "text": "ACTIVO (UP)" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "pluginVersion": "10.0.0",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "editorMode": "code", "expr": "pg_up{node=\"node3\"}", "legendFormat": "Estado Node 3", "range": true, "refId": "A" }],
+      "title": "Salud Node 3",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "CONEXIONES ACTIVAS Y TRANSACCIONES",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "smooth" }, "unit": "none" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "pg_stat_activity_count", "legendFormat": "{{node}} - Conexiones", "refId": "A" }],
+      "title": "Conexiones Activas por Nodo",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "smooth" }, "unit": "ops" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(pg_stat_database_xact_commit{datname=\"tpFinal\"}[1m])", "legendFormat": "{{node}} - Commits/seg", "refId": "A" }],
+      "title": "Transacciones Confirmadas (Commits/seg en tpFinal)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "RECURSOS DEL SERVIDOR (CPU Y MEMORIA)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "max": 100, "min": 0, "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 85 }] } } },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 15 },
+      "id": 6,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)", "legendFormat": "Uso CPU Total", "refId": "A" }],
+      "title": "Uso de CPU Host (%)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "max": 100, "min": 0, "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 75 }, { "color": "red", "value": 85 }] } } },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 15 },
+      "id": 7,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "Memoria en Uso", "refId": "A" }],
+      "title": "Uso de Memoria RAM Host (%)",
+      "type": "gauge"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["postgresql", "patroni", "cluster", "monitoreo"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cluster PostgreSQL & Monitoreo HIA",
+  "uid": "cluster-pg-dashboard",
+  "version": 1
+}
