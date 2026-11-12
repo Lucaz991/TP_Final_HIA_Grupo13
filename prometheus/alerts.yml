@@ -1,24 +1,47 @@
 ﻿groups:
   - name: cluster_postgres_alerts
     rules:
+      # 1. PostgreSQL no responde, aunque el exporter siga activo
       - alert: PostgresNodeDown
-        expr: pg_up == 0
+        expr: pg_up{job="postgres-cluster-nodes"} == 0
         for: 30s
         labels:
           severity: critical
         annotations:
-          summary: "Nodo PostgreSQL caido"
-          description: "El nodo {{ $labels.instance }} del cluster Patroni no responde desde hace mas de 30 segundos."
+          summary: "Nodo PostgreSQL caído"
+          description: "PostgreSQL del nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} no responde desde hace más de 30 segundos."
 
+      # 2. El exporter del nodo no responde (ej. contenedor detenido)
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-cluster-nodes"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL Exporter caído"
+          description: "El exporter del nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} no responde desde hace más de 30 segundos."
+
+      # 3. Respaldo: menos de 3 nodos operativos en el clúster
+      - alert: PostgresClusterDegraded
+        expr: count(pg_up{job="postgres-cluster-nodes"} == 1) < 3
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Clúster PostgreSQL degradado"
+          description: "Solo hay {{ $value }} de 3 nodos PostgreSQL activos en el clúster."
+
+      # 4. Uso elevado de conexiones en cualquiera de los tres nodos
       - alert: PostgresHighConnections
-        expr: (sum by (instance) (pg_stat_activity_count) / 500) * 100 > 80
+        expr: (sum by (instance, node) (pg_stat_activity_count{job="postgres-cluster-nodes"}) / 500) * 100 > 80
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "Conexiones elevadas en base de datos"
-          description: "El uso de conexiones activas en {{ $labels.instance }} supera el 80% del limite (max_connections=500)."
+          summary: "Conexiones elevadas en PostgreSQL"
+          description: "El nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} supera el 80% del límite de conexiones (500)."
 
+      # 5. CPU del host monitoreado por Node Exporter
       - alert: HostHighCpuUsage
         expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 85
         for: 2m
@@ -26,8 +49,9 @@
           severity: warning
         annotations:
           summary: "Uso de CPU alto en el servidor"
-          description: "La CPU supera el umbral del 85% durante mas de 2 minutos."
+          description: "La CPU del servidor {{ $labels.instance }} supera el 85% durante más de 2 minutos."
 
+      # 6. Memoria del host monitoreado por Node Exporter
       - alert: HostLowMemory
         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
         for: 1m
@@ -35,4 +59,4 @@
           severity: warning
         annotations:
           summary: "Memoria RAM baja en el servidor"
-          description: "La memoria disponible es menor al 15% del total."
+          description: "La memoria disponible en {{ $labels.instance }} es menor al 15% del total."
