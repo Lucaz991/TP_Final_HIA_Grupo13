@@ -25,7 +25,6 @@ services:
     build:
       context: ./db/cluster
       dockerfile: Dockerfile
-    container_name: db_node1
     env_file: .env
     environment:
       PATRONI_NAME: node1
@@ -52,7 +51,6 @@ services:
     build:
       context: ./db/cluster
       dockerfile: Dockerfile
-    container_name: db_node2
     env_file: .env
     environment:
       PATRONI_NAME: node2
@@ -79,7 +77,6 @@ services:
     build:
       context: ./db/cluster
       dockerfile: Dockerfile
-    container_name: db_node3
     env_file: .env
     environment:
       PATRONI_NAME: node3
@@ -161,7 +158,6 @@ services:
 
   node-exporter:
     image: prom/node-exporter:latest
-    container_name: node-exporter
     ports:
       - "127.0.0.1:9100:9100"
     networks:
@@ -169,6 +165,8 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
+    mem_limit: 1536m
+    mem_reservation: 512m
     ports:
       - "127.0.0.1:8083:8080"
     volumes:
@@ -182,7 +180,6 @@ services:
   # 3 Exporters individuales para monitorear cada nodo del clúster
   postgres-exporter-node1:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres_exporter_node1
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node1:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
@@ -193,7 +190,6 @@ services:
 
   postgres-exporter-node2:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres_exporter_node2
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node2:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
@@ -204,7 +200,6 @@ services:
 
   postgres-exporter-node3:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres_exporter_node3
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node3:5432/${POSTGRES_DB}?sslmode=disable"
     depends_on:
@@ -215,6 +210,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    mem_limit: 1280m
+    mem_reservation: 512m
     container_name: grafana
     ports:
       - "127.0.0.1:3001:3000"
