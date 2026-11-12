@@ -100,7 +100,7 @@ services:
       - etcd
 
   proxy:
-    image: haproxy:3.4.5-alpine
+    image: haproxy:3.0-alpine
     ports:
       - "127.0.0.1:${DB_PROXY_PORT:-5465}:5465"
       - "127.0.0.1:7000:7000"
@@ -136,7 +136,7 @@ services:
   # 2. SISTEMA DE MONITOREO
   # ==========================================
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3
     container_name: prometheus
     ports:
       - "127.0.0.1:9090:9090"
@@ -177,6 +177,9 @@ services:
     networks:
       - redtpfinal
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: postgres-exporter
   # 3 Exporters individuales para monitorear cada nodo del clúster
   postgres-exporter-node1:
     image: prometheuscommunity/postgres-exporter:latest
@@ -244,7 +247,7 @@ services:
       - redtpfinal
 
   nextcloud:
-    image: nextcloud:latest
+    image: nextcloud:31-apache
     ports:
       - "127.0.0.1:8082:80"
     depends_on:
@@ -267,6 +270,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: app-backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -294,6 +301,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: app-frontend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
     ports:
       - "127.0.0.1:8081:80"
     networks:
@@ -305,7 +321,7 @@ services:
   # 5. GLPI 
   # ==========================================
   glpi-db:
-    image: "mysql"
+    image: "mysql:8.4"
     restart: "unless-stopped"
     volumes:
       - db-glpi:/var/lib/mysql
@@ -318,7 +334,7 @@ services:
       - redtpfinal
 
   glpi:
-    image: "glpi/glpi:latest"
+    image: "glpi/glpi:11"
     restart: "unless-stopped"
     volumes:
       - glpi_data:/var/glpi
@@ -429,6 +445,28 @@ services:
       SEARXNG_SECRET: ${SEARXNG_SECRET}
     volumes:
       - ./searxng/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 8. CLOUDFLARE TUNNEL (publicacion segura)
+  # ==========================================
+  # Named Tunnel administrado desde el dashboard de Cloudflare Zero Trust.
+  # Requiere TUNNEL_TOKEN en .env (se obtiene al crear el tunnel en
+  # one.dash.cloudflare.com -> Networks -> Tunnels).
+  # Los "Public Hostnames" se configuran en el dashboard apuntando a los
+  # nombres de servicio internos:
+  #   app.<dominio>    -> http://app-frontend:80
+  #   glpi.<dominio>   -> http://glpi:80
+  #   docs.<dominio>   -> http://nextcloud:80
+  #   n8n.<dominio>    -> http://n8n:5678
+  #   monitor.<dominio>-> http://prometheus:9090
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     networks:
       - redtpfinal
 

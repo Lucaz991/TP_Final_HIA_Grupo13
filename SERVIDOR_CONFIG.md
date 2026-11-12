@@ -117,15 +117,15 @@ Para evitar conflictos de puertos, actualizar las siguientes líneas en `docker-
 services:
   db-primary:
     ports:
-      - "5434:5432"  # Cambiado de 5432 a 5434
+      - "5434:5432"  # Cambiado de 5432 a 5434 --> 5434 a 5433 
 
   db-replica:
     ports:
-      - "5435:5432"  # Cambiado de 5433 a 5435
+      - "5435:5432"  # Cambiado de 5433 a 5435 --> 5435 a 5434
 
   pgadmin:
     ports:
-      - "5051:80"  # Cambiado de 5050 a 5051
+      - "5051:80"  # Cambiado de 5050 a 5051 --> 5050 
 ```
 
 ## Variables de Entorno (.env)
@@ -179,3 +179,38 @@ PGADMIN_PORT=5051
 - [ ] Actualizar .env con puertos corregidos
 - [ ] Probar docker-compose up -d
 - [ ] Verificar que todos los contenedores inicien
+---
+
+## Publicación segura: Cloudflare Named Tunnel
+
+El servicio `cloudflared` del `compose.yaml` corre el túnel dentro de `redtpfinal`, por lo que los hostnames públicos se resuelven **directo a los servicios internos** sin exponer puertos del host.
+
+### Setup (una sola vez)
+
+1. Comprar dominio en Cloudflare Registrar (~USD 2-10/año).
+2. En [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → **Networks → Tunnels → Create a tunnel** → Cloudflared → nombre `grupo13-server`.
+3. Copiar el **token** y ponerlo en `.env`: `TUNNEL_TOKEN=eyJh...`
+4. En la pestaña **Public Hostnames** del túnel, agregar:
+
+   | Subdominio | Servicio interno |
+   |------------|------------------|
+   | `app.<dominio>` | `http://app-frontend:80` |
+   | `glpi.<dominio>` | `http://glpi:80` |
+   | `docs.<dominio>` | `http://nextcloud:80` |
+   | `n8n.<dominio>` | `http://n8n:5678` |
+   | `monitor.<dominio>` | `http://prometheus:9090` |
+
+5. `docker compose up -d cloudflared` → los subdominios quedan vivos con HTTPS gratis.
+6. Actualizar `.env`: `FRONTEND_URL=https://app.<dominio>` y recrear backend.
+
+### Cloudflare Access (restricción por email)
+
+- **Access → Applications → Add** → Self-hosted → dominio `glpi.<dominio>` → Policy Allow → Include → Emails (los 5 del grupo).
+- Repetir para `docs.`, `n8n.`, `monitor.`. **`app.` queda público** (no se agrega).
+
+### Fallback sin dominio (Quick Tunnel temporal)
+
+```powershell
+cloudflared tunnel --url http://localhost:8081
+```
+URL efímera por sesión; no apta para producción ni para compartir GLPI/Nextcloud de forma estable.
