@@ -149,9 +149,25 @@ services:
       - '--storage.tsdb.path=/prometheus'
     depends_on:
       - cadvisor
+      - alertmanager
       - postgres-exporter-node1
       - postgres-exporter-node2
       - postgres-exporter-node3
+    networks:
+      - redtpfinal
+
+  alertmanager:
+    image: prom/alertmanager:v0.30.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
     networks:
       - redtpfinal
 
@@ -471,6 +487,7 @@ volumes:
   postgres18_data:
   pgadmin_data:
   prometheus_data:
+  alertmanager_data:
   nextcloud:
   db-nextcloud:
   glpi_data:
