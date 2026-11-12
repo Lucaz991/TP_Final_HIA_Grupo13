@@ -148,18 +148,10 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     depends_on:
-      - node-exporter
       - cadvisor
       - postgres-exporter-node1
       - postgres-exporter-node2
       - postgres-exporter-node3
-    networks:
-      - redtpfinal
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    ports:
-      - "127.0.0.1:9100:9100"
     networks:
       - redtpfinal
 
