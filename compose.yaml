@@ -334,7 +334,7 @@ services:
     volumes:
       - db-glpi:/var/lib/mysql
     environment:
-      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_ROOT_PASSWORD: ${GLPI_ROOT_PASSWORD}
       MYSQL_DATABASE: ${GLPI_DB_NAME}
       MYSQL_USER: ${GLPI_DB_USER}
       MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
