@@ -12,12 +12,17 @@ export class TutoriaService {
 
   constructor(private http: HttpClient) { }
 
-  obtenerProfesores(): Observable<any> {
-    return this.http.get(this.urlHost + 'api/usuario?rol=profesor');
+  obtenerProfesores(page = 1, categoriaId = '', orden = 'predeterminado', lat: number | null = null, lng: number | null = null): Observable<any> {
+    const params: Record<string, string | number> = { rol: 'profesor', page, limit: 12 };
+    if (categoriaId) params['categoriaId'] = categoriaId;
+    if (orden === 'cercania' && lat !== null && lng !== null) {
+      Object.assign(params, { orden, lat, lng });
+    }
+    return this.http.get(this.urlHost + 'api/usuario', { params });
   }
 
-  obtenerUsuarios(): Observable<any> {
-    return this.http.get(this.urlHost + 'api/usuario');
+  obtenerUsuarios(id?: number): Observable<any> {
+    return this.http.get(this.urlHost + 'api/usuario', { params: id ? { id } : {} });
   }
 
   obtenerCategorias(): Observable<any> {
