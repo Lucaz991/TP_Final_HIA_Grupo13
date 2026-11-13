@@ -3,9 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartData, ChartOptions } from 'chart.js';
+import { Observable, Subscription } from 'rxjs';
 import { AdminService } from '../../services/admin.service';
 import {
   DashboardSummary,
+  PaginatedResponse,
   FullTutorial,
   MonthCount,
   RoleStateCount,
@@ -163,6 +165,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   tableReady = false;
   tutorials = signal<FullTutorial[]>([]);
   private dtInstance: any;
+  tableError = '';
+  private tableRequest?: Subscription;
+  private tableGeneration = 0;
+  private destroyed = false;
 
   private readonly dtOptions = {
     language: {
@@ -242,7 +248,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         className: 'fw-semibold',
         render: (d: number, type: string) => {
           if (type !== 'display') return d ?? 0;
-          return `$${(d ?? 0).toFixed(2)}`;
+          return `$${Number(d ?? 0).toFixed(2)}`;
         }
       },
       {
@@ -375,31 +381,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // 4. GETTERS PARA KPIs FINANCIEROS (calculados en el frontend)
   // ==========================================================
 
-  get totalRevenue(): number {
-    return this.tutorials()
-      .filter(t => t.pagada)
-      .reduce((sum, t) => sum + (t.precioAcordado || 0), 0);
-  }
-
-  get pendingRevenue(): number {
-    return this.tutorials()
-      .filter(t => !t.pagada && t.estado !== 'rechazada' && t.estado !== 'cancelada')
-      .reduce((sum, t) => sum + (t.precioAcordado || 0), 0);
-  }
-
-  get averagePrice(): number {
-    const list = this.tutorials();
-    if (list.length === 0) return 0;
-    const total = list.reduce((sum, t) => sum + (t.precioAcordado || 0), 0);
-    return total / list.length;
-  }
-
-  get paymentRate(): number {
-    const list = this.tutorials();
-    if (list.length === 0) return 0;
-    const paidCount = list.filter(t => t.pagada).length;
-    return (paidCount / list.length) * 100;
-  }
+  get totalRevenue(): number { return this.summary.totalRevenue ?? 0; }
+  get pendingRevenue(): number { return this.summary.pendingRevenue ?? 0; }
+  get averagePrice(): number { return this.summary.averagePrice ?? 0; }
+  get paymentRate(): number { return this.summary.paymentRate ?? 0; }
 
   constructor(private adminService: AdminService, private cdr: ChangeDetectorRef, private router: Router) { }
 
@@ -467,6 +452,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   switchView(view: 'tutorias' | 'usuarios' | 'categorias'): void {
     if (this.currentTableView !== view) {
+      this.tableRequest?.unsubscribe();
+      this.tableGeneration++;
+      this.tableError = '';
       this.currentTableView = view;
       this.tableReady = false;
 
@@ -492,6 +480,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.tableGeneration++;
+    this.tableRequest?.unsubscribe();
     if (this.dtInstance) {
       this.dtInstance.destroy();
     }
@@ -614,42 +605,67 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // 8. GESTIÓN DE TUTORÍAS (CARGA Y EXPORTACIONES)
   // ==========================================================
 
-  // Carga el listado completo de tutorías; inicializa la tabla una vez cargada en el DOM
-  loadFullTutorials(): void {
-    this.adminService.getFullTutorials().subscribe({
-      next: (res) => {
-        if (res.status === 1) {
-          this.tutorials.set(res.data);
-          this.tableReady = true;
-          this.cdr.detectChanges();
+  // Inicializa DataTables con consultas paginadas al servidor.
+  loadFullTutorials(): void { this.loadServerTable('tutorias'); }
 
-          // Inicializar DataTable nativo en la siguiente macro-tarea para asegurar que el elemento ya está renderizado
-          setTimeout(() => {
-            if (this.tutorialsTable && this.tutorialsTable.nativeElement) {
-              if (this.dtInstance) {
-                this.dtInstance.destroy();
-              }
-              this.dtInstance = new DataTable(this.tutorialsTable.nativeElement, {
-                ...this.dtOptions,
-                data: res.data
-              });
+  private loadServerTable(view: 'tutorias' | 'usuarios'): void {
+    if (this.destroyed || this.currentTableView !== view) return;
+    if (this.dtInstance) {
+      this.dtInstance.ajax.reload(null, false);
+      return;
+    }
+    this.tableReady = true;
+    this.cdr.detectChanges();
+    const generation = ++this.tableGeneration;
+    setTimeout(() => {
+      if (this.destroyed || generation !== this.tableGeneration || this.currentTableView !== view) return;
+      const element = view === 'tutorias' ? this.tutorialsTable : this.usersTable;
+      if (!element?.nativeElement) return;
+      const sorts = view === 'tutorias'
+        ? ['id', 'alumno', 'profesor', 'categoria', 'modalidad', 'estado', 'pagada', '', 'precioAcordado', 'fechaHora', 'createdAt']
+        : ['id', 'nombre', 'rol', 'estado', 'universidad', 'carrera', 'createdAt'];
+      this.dtInstance = new DataTable(element.nativeElement, {
+        ...(view === 'tutorias' ? this.dtOptions : this.dtOptionsUsers),
+        serverSide: true,
+        processing: true,
+        searchDelay: 500,
+        columnDefs: view === 'tutorias' ? [{ targets: 7, orderable: false, searchable: false }] : [],
+        ajax: (request: any, callback: any) => {
+          this.tableRequest?.unsubscribe();
+          this.tableError = '';
+          const order = request.order?.[0];
+          const query = { start: request.start, limit: request.length,
+            search: request.search?.value ?? '', sort: sorts[order?.column] || 'createdAt',
+            direction: order?.dir === 'asc' ? 'asc' : 'desc' };
+          const source: Observable<PaginatedResponse<FullTutorial | FullUsuarioDashboard>> = view === 'tutorias' ? this.adminService.getFullTutorials(query) : this.adminService.getUsers(query);
+          this.tableRequest = source.subscribe({
+            next: (res) => {
+              if (this.destroyed || generation !== this.tableGeneration) return;
+              if (view === 'tutorias') this.tutorials.set(res.data as FullTutorial[]);
+              else this.users.set(res.data as FullUsuarioDashboard[]);
+              callback({ draw: request.draw, data: res.data,
+                recordsTotal: res.recordsTotal, recordsFiltered: res.recordsFiltered });
+              this.cdr.detectChanges();
+            },
+            error: (err) => {
+              if (this.destroyed || generation !== this.tableGeneration) return;
+              console.error('Error cargando la página:', err);
+              this.tableError = 'No se pudo cargar la página. Intentá nuevamente.';
+              if (view === 'tutorias') this.tutorials.set([]); else this.users.set([]);
+              callback({ draw: request.draw, data: [], recordsTotal: 0, recordsFiltered: 0 });
+              this.cdr.detectChanges();
             }
-          }, 0);
+          });
         }
-      },
-      error: (err) => {
-        console.error('Error loading tutorials:', err);
-        this.tableReady = true;
-        this.cdr.detectChanges();
-      }
-    });
+      });
+    }, 0);
   }
 
-  // Exporta el listado de tutorías a PDF
+
   exportToPDF(): void {
     const doc = new jsPDF({ orientation: 'landscape' });
     doc.setFontSize(13);
-    doc.text('Reporte de Tutorías', 14, 15);
+    doc.text('Reporte de Tutorías - página visible', 14, 15);
 
     autoTable(doc, {
       startY: 22,
@@ -665,7 +681,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         t.estado,
         t.pagada ? 'Sí' : 'No',
         t.calificacion ? `${t.calificacion.calificacion}/5` : '—',
-        `$${t.precioAcordado.toFixed(2)}`,
+        `$${Number(t.precioAcordado).toFixed(2)}`,
         t.fechaHora ? new Date(t.fechaHora).toLocaleString() : '',
         new Date(t.createdAt).toLocaleDateString()
       ]),
@@ -673,7 +689,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       headStyles: { fillColor: [90, 107, 124] }
     });
 
-    doc.save('reporte-tutorias.pdf');
+    doc.save('reporte-tutorias-pagina.pdf');
   }
 
   // Exporta el listado de tutorías a Excel (.xlsx)
@@ -698,7 +714,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Tutorías');
-    XLSX.writeFile(workbook, 'reporte-tutorias.xlsx');
+    XLSX.writeFile(workbook, 'reporte-tutorias-pagina.xlsx');
   }
 
   // ==========================================================
@@ -706,34 +722,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ==========================================================
 
   // Carga usuarios para la vista de usuarios
-  loadUsers(): void {
-    this.adminService.getUsers().subscribe({
-      next: (res) => {
-        if (res.status === 1) {
-          this.users.set(res.data);
-          this.tableReady = true;
-          this.cdr.detectChanges();
-
-          setTimeout(() => {
-            if (this.usersTable && this.usersTable.nativeElement) {
-              if (this.dtInstance) {
-                this.dtInstance.destroy();
-              }
-              this.dtInstance = new DataTable(this.usersTable.nativeElement, {
-                ...this.dtOptionsUsers,
-                data: res.data
-              });
-            }
-          }, 0);
-        }
-      },
-      error: (err) => {
-        console.error('Error loading users:', err);
-        this.tableReady = true;
-        this.cdr.detectChanges();
-      }
-    });
-  }
+  loadUsers(): void { this.loadServerTable('usuarios'); }
 
   openEditUserModal(user: FullUsuarioDashboard): void {
     this.editingUser = { ...user };
