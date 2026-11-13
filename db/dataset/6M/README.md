@@ -1,11 +1,11 @@
 # PT-23 — Dataset de seis millones de tutorías
 
-La tabla seleccionada para la prueba de volumen es `public.tutorias`. Los scripts actuales preparan desde tablas vacías 100 categorías, 10 tarifas, dos administradores, alumnos, profesores, asignaciones, horarios y tutorías. La carga definitiva genera 6.000.000 de tutorías. El piloto utiliza los mismos generadores con un volumen menor.
+La tabla seleccionada para la prueba de volumen es `public.tutorias`. Los scripts actuales preparan desde tablas vacías 100 categorías, 10 tarifas, dos administradores, alumnos, profesores, asignaciones, horarios, tutorías y calificaciones. La carga definitiva genera 6.000.000 de tutorías y 3.600.000 calificaciones: una por cada tutoría finalizada y pagada. El piloto utiliza los mismos generadores con un volumen menor.
 
 ## Requisitos
 
 - Clúster PostgreSQL inicializado con el esquema de la aplicación. Las tablas y los tipos ENUM provienen de los modelos Sequelize del backend.
-- Tablas del conjunto vacías antes de una nueva ejecución y controles de `pt23_dataset` preparados explícitamente. Respaldar los resultados anteriores antes de planificar una limpieza.
+- Tablas del conjunto, incluidas `tutorias` y `calificaciones`, vacías antes de una nueva ejecución y controles de `pt23_dataset` preparados explícitamente. Respaldar los resultados anteriores antes de planificar una limpieza.
 - Backend configurado para crear el esquema e iniciar sin invocar los seeders. Los datos se cargan mediante SQL.
 - Backend actualizado con `sequelize.sync()` y el índice único de precios sobre `(nivel, modalidad)`.
 - pgAdmin conectado a `tpFinal` mediante `proxy`, puerto `5432`, con un usuario autorizado para insertar datos y crear tablas y restricciones.
@@ -24,8 +24,8 @@ Cada instalación local tiene su propia base. Para reproducir el dataset se ejec
 | [02_usuarios.sql](02_usuarios.sql) | Utilizar los tres hashes bcrypt con costo 10, uno por rol, y conservarlos durante la ejecución. Piloto con rango 1–1000. Definitiva con los cuatro rangos de 25.000 siguientes. Las dos cuentas admin se conservan por email único. |
 | [03_asignaciones.sql](03_asignaciones.sql) | Después de cargar los usuarios. Utilizar las cuatro tandas de hasta 25.000 profesores indicadas abajo. Genera cuatro categorías por profesor y requiere exactamente 100 categorías. |
 | [04_horarios.sql](04_horarios.sql) | Después de cargar los usuarios. Utilizar las cuatro tandas de hasta 25.000 profesores y `profesores_totales = 100000`. Genera cuatro franjas activas por profesor, lunes, martes, jueves y viernes, modalidad ambas, en el turno que corresponde a su número de email. |
-| [05_tutorias.sql](05_tutorias.sql) | Configurar el modo y ejecutar seis veces, cambiando `lote` de 1 a 6. |
-| [06_verificacion_final.sql](06_verificacion_final.sql) | Ejecutar los cinco `ANALYZE` como bloque separado. Después ejecutar individualmente las consultas numeradas. Las cantidades esperadas se obtienen de la configuración persistida. |
+| [05_tutorias_y_calificaciones.sql](05_tutorias_y_calificaciones.sql) | Generador unificado versión 4. Configurar el modo y ejecutar el archivo completo seis veces, cambiando `lote` de 1 a 6. Inserta tutorías y sus calificaciones en la misma transacción. |
+| [06_verificacion_final.sql](06_verificacion_final.sql) | Ejecutar los cinco `ANALYZE` como bloque separado. Después ejecutar individualmente las consultas numeradas. Las cantidades esperadas se obtienen de la configuración persistida. Este archivo verifica el conjunto original; completar con las consultas de calificaciones de este README y ejecutar también `ANALYZE public.calificaciones`. |
 
 ### Parámetros del piloto y de la carga definitiva
 
@@ -38,8 +38,10 @@ Cada instalación local tiene su propia base. Para reproducir el dataset se ejec
 | Asignaciones | 4000 | 400000 |
 | Horarios | 4000 | 400000 |
 | Tutorías | 60000 | 6000000 |
+| Calificaciones por lote | 6000 | 600000 |
+| Calificaciones totales | 36000 | 3600000 |
 
-El generador de tutorías está guardado en modo definitivo, con `lote = 1`, `usuarios_por_rol = 100000` y `registros_por_lote = 1000000`. Mantener sus parámetros durante los seis lotes y cambiar únicamente `lote`. Para el piloto se usan `usuarios_por_rol = 1000` y `registros_por_lote = 10000`. Usuarios, asignaciones y horarios se ejecutan una vez con rango 1–1000 en ese modo. En horarios configurar también `profesores_totales = 1000` para conservar las proporciones de los tres turnos.
+El generador unificado de tutorías y calificaciones está guardado en modo definitivo, con `lote = 1`, `usuarios_por_rol = 100000` y `registros_por_lote = 1000000`. Mantener sus parámetros durante los seis lotes y cambiar únicamente `lote`. Para el piloto se usan `usuarios_por_rol = 1000` y `registros_por_lote = 10000`. Usuarios, asignaciones y horarios se ejecutan una vez con rango 1–1000 en ese modo. En horarios configurar también `profesores_totales = 1000` para conservar las proporciones de los tres turnos.
 
 Para una nueva ejecución, comprobar el piloto y el login con una cuenta de cada rol antes de preparar la definitiva. El generador rechaza cambiar de modo sobre una ejecución iniciada y los controles anteriores sin versión. La preparación de una base vacía requiere un respaldo y una limpieza manual explícita de las tablas de la aplicación y de `pt23_dataset.configuracion`, `pt23_dataset.ejecucion` y `pt23_dataset.lotes`. Estos scripts conservan los datos al repetirse y no incluyen una limpieza automática. La ejecución del piloto y las pruebas de login de la versión actual todavía requieren evidencias propias.
 
@@ -98,21 +100,90 @@ Los identificadores `INTEGER` se conservan porque admiten hasta 2.147.483.647 va
 
 ## Registro y reanudación
 
-`05_tutorias.sql` crea el esquema auxiliar `pt23_dataset` y las tablas `configuracion`, `ejecucion` y `lotes`. Guardan el modo y la versión del generador, el punto de partida de la carga y la cantidad y duración por lote, respectivamente.
+`05_tutorias_y_calificaciones.sql` crea el esquema auxiliar `pt23_dataset` y las tablas `configuracion`, `ejecucion` y `lotes`. Guardan el modo y la versión del generador, el punto de partida de la carga y la cantidad y duración por lote, respectivamente.
 
-La versión actual del control es 3. Los datos y controles de versiones anteriores requieren preparación explícita antes de una carga nueva. El último ajuste del 5 al 16 de noviembre afecta únicamente a la ronda 59. Si los primeros cinco lotes se generaron con los tres turnos y el rango 2022–2026, sus fechas se conservan al ejecutar el lote 6 con el archivo actualizado. Un lote 6 ya confirmado se omite al repetirlo. Cambiar el archivo no actualiza tutorías existentes.
+La versión actual del control es **4**. Requiere una carga nueva y no permite continuar lotes registrados con la versión 3, aunque el calendario sea el mismo. Respaldar y preparar explícitamente los datos y controles antes de iniciar otra ejecución. El script no borra datos ni agrega calificaciones a tutorías de una carga anterior. Los archivos anteriores `05_tutorias.sql` y `db/optimizacion/00_preparar_calificaciones.sql` fueron reemplazados por el generador unificado; no ejecutar ambos mecanismos.
 
-Las tutorías y el registro de su lote se confirman dentro de la misma transacción. Si un lote ya figura como confirmado, se omite su inserción. Esta comprobación presupone conservar tanto los datos como las tablas de control. Para iniciar otro dataset desde cero hace falta planificar explícitamente su limpieza.
+Las tutorías, sus calificaciones y el registro de su lote se confirman dentro de la misma transacción. Si un lote ya figura como confirmado, se omite su inserción. Esta comprobación presupone conservar tanto los datos como las tablas de control. Para iniciar otro dataset desde cero hace falta planificar explícitamente su limpieza.
 
-Tras una desconexión, reconectar mediante el proxy, comprobar el líder y consultar `pt23_dataset.lotes`. Si el lote no aparece, verificar que la sesión anterior haya terminado antes de repetirlo. El script emplea un bloqueo asesor para serializar sus ejecuciones.
+Tras una desconexión, reconectar mediante el proxy, comprobar el líder y consultar `pt23_dataset.lotes`. Si el lote no aparece, verificar que la sesión anterior haya terminado antes de repetirlo. El script utiliza los bloqueos asesores 23004 y 24000 y bloquea escrituras concurrentes en tutorías y calificaciones durante cada lote. Ante un error, ejecutar `ROLLBACK` en la misma conexión antes de reintentar.
 
-Los seis registros de lotes se comparan con el conteo real de `tutorias` mediante la consulta 2 de la verificación. Al finalizar, `coincide` y `completo` deben devolver `true`. Si se eliminan tutorías manualmente pero se conservan los controles, repetir un lote confirmado seguirá omitiéndolo.
+Los seis registros de lotes se comparan con el conteo real de `tutorias` mediante la consulta 2 de la verificación. Al finalizar, `coincide` y `completo` deben devolver `true`. Si se eliminan tutorías o calificaciones manualmente pero se conservan los controles, repetir un lote confirmado seguirá omitiéndolo; no repara datos alterados.
 
-## Evidencias de la versión actual
+## Calificaciones en la carga unificada
+
+El CTE `tutorias_insertadas` usa `INSERT ... RETURNING` para entregar los IDs, estados y fechas recién insertados. A partir de esas filas, el generador selecciona las finalizadas y pagadas del lote y crea una calificación para cada una. No vuelve a recorrer toda la tabla `tutorias` para seleccionar las calificables.
+
+`row_number()` ordena por ID únicamente las finalizadas del lote; una permutación determinista de 100 posiciones reparte las puntuaciones. No depende de IDs consecutivos ni del orden de salida de `RETURNING`. Cada calificación incluye un comentario según la puntuación y fechas `createdAt` y `updatedAt` iguales a `fechaHora + interval '1 hour'`.
+
+| Puntuación | Proporción | Por lote definitivo | Total definitivo | Total piloto |
+|---|---:|---:|---:|---:|
+| 1 | 5 % | 30.000 | 180.000 | 1.800 |
+| 2 | 10 % | 60.000 | 360.000 | 3.600 |
+| 3 | 20 % | 120.000 | 720.000 | 7.200 |
+| 4 | 30 % | 180.000 | 1.080.000 | 10.800 |
+| 5 | 35 % | 210.000 | 1.260.000 | 12.600 |
+| Total | 100 % | 600.000 | 3.600.000 | 36.000 |
+
+El script comprueba los conteos de tutorías y calificaciones insertadas antes de confirmar cada lote. Si alguno no coincide, se revierte la transacción. El campo `registros` de `pt23_dataset.lotes` sigue contando **tutorías**, no la suma de ambas tablas. La salida `calificaciones_confirmadas_esperadas` se calcula desde los controles: es una cantidad esperada y no sustituye el conteo real ni las verificaciones de integridad.
+
+### Verificación final de calificaciones
+
+Ejecutar una vez al completar los seis lotes, con el backend detenido, además de `06_verificacion_final.sql`. Estas comprobaciones recorren los datos para verificar el resultado final; no se ejecutan en cada lote.
+
+```sql
+ANALYZE public.calificaciones;
+
+-- Cantidades reales: definitiva 6000000 y 3600000; piloto 60000 y 36000.
+SELECT
+    (SELECT COUNT(*) FROM public.tutorias) AS tutorias,
+    (SELECT COUNT(*) FROM public.calificaciones) AS calificaciones;
+
+-- Comparar con la distribución prevista en la tabla anterior.
+SELECT calificacion, COUNT(*) AS cantidad
+FROM public.calificaciones
+GROUP BY calificacion
+ORDER BY calificacion;
+
+-- Esperado: cero calificaciones sin tutoría, con estado/pago incorrectos,
+-- puntuación inválida o fechas distintas de las generadas.
+SELECT COUNT(*) AS calificaciones_invalidas
+FROM public.calificaciones c
+LEFT JOIN public.tutorias t ON t.id = c."tutoriaId"
+WHERE t.id IS NULL
+   OR t.estado::text IS DISTINCT FROM 'finalizada'
+   OR t.pagada IS DISTINCT FROM TRUE
+   OR c.calificacion IS NULL
+   OR c.calificacion NOT BETWEEN 1 AND 5
+   OR c."createdAt" IS DISTINCT FROM t."fechaHora" + interval '1 hour'
+   OR c."updatedAt" IS DISTINCT FROM t."fechaHora" + interval '1 hour';
+
+-- Esperado: cero filas; una sola calificación por tutoría.
+SELECT "tutoriaId", COUNT(*) AS cantidad
+FROM public.calificaciones
+GROUP BY "tutoriaId"
+HAVING COUNT(*) > 1;
+
+-- Esperado: cero finalizadas y pagadas sin calificar.
+SELECT COUNT(*) AS finalizadas_sin_calificacion
+FROM public.tutorias t
+LEFT JOIN public.calificaciones c ON c."tutoriaId" = t.id
+WHERE t.estado = 'finalizada' AND t.pagada AND c.id IS NULL;
+```
+
+Guardar las salidas, el tamaño final de `calificaciones` y sus índices, el tamaño de la base y los tiempos de cada lote. La duración registrada en `pt23_dataset.lotes` ahora incluye la preparación posterior al inicio del temporizador, la inserción de tutorías y la de calificaciones, hasta antes del `COMMIT`. Registrar por separado el tiempo completo informado por pgAdmin.
+
+### Estado de las mediciones de la versión 4
+
+Las cantidades anteriores son resultados esperados del generador. Aún deben adjuntarse las salidas reales de la carga unificada, sus verificaciones y sus mediciones de tiempo y almacenamiento. Evitar interpretar las mediciones históricas siguientes como resultados de esta versión o afirmar una mejora de tiempo sin medir ambas cargas en condiciones comparables.
+
+## Evidencias anteriores a la carga unificada (versión 3)
+
+**Estas mediciones preceden al generador versión 4 y no incluyen su nueva carga de 3.600.000 calificaciones.**
 
 El responsable comunicó la regeneración de horarios y el avance de los lotes con los tres turnos. El cambio final al 16 de noviembre se incorporó antes de ejecutar el lote 6. Las capturas de tamaños compartidas el 10 de noviembre de 2026 confirman las mediciones siguientes. Queda pendiente adjuntar las salidas finales de cantidades, distribución anual, turnos, integridad y tiempos de esta versión. Los resultados conservados más abajo bajo el título de carga anterior corresponden a otras ejecuciones.
 
-### Tamaño final de la base actual
+### Tamaño final registrado de la base
 
 | Medición | Bytes |
 |---|---:|
@@ -122,7 +193,7 @@ El responsable comunicó la regeneración de horarios y el avance de los lotes c
 
 PostgreSQL informó `1375 MB` como tamaño final de `tpFinal`. La medición inicial corresponde al comienzo de la generación de tutorías, después de cargar los datos de apoyo. El crecimiento se obtiene restando ese valor al tamaño final. `pg_database_size` mide una copia de la base y los archivos de sus relaciones, sin sumar las réplicas ni el WAL del clúster.
 
-### Tamaño actual de tablas e índices
+### Tamaño registrado de tablas e índices
 
 | Tabla | Tabla y almacenamiento auxiliar, bytes | Índices, bytes | Total, bytes | Total informado por PostgreSQL |
 |---|---:|---:|---:|---|

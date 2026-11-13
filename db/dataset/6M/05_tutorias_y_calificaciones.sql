@@ -1,3 +1,12 @@
+-- CARGA UNIFICADA NUEVA: reemplaza 05_tutorias.sql y la carga separada de calificaciones.
+-- No ejecutar ambos generadores. Requiere tutorias y calificaciones vacías al iniciar.
+-- No borra datos. No completa datasets de la versión 3.
+-- Ejecutar archivo completo con Auto-commit y backend detenido, en el líder de tpFinal.
+-- Cambiar únicamente lote (1 a 6), conservando la misma configuración.
+-- Definitiva: 100000 usuarios/rol, 1000000 tutorías/lote, 600000 calificaciones/lote.
+-- Piloto: 1000 usuarios/rol, 10000 tutorías/lote, 6000 calificaciones/lote.
+-- Un lote es atómico; un error exige ROLLBACK antes de repetirlo.
+-- Las secuencias pueden tener huecos tras un rollback; no afecta a las relaciones.
 -- PT-23 - Generador de tutorías para piloto o carga definitiva.
 -- Piloto: 1000 usuarios por rol y seis lotes de 10000 tutorías.
 -- Definitiva: 100000 usuarios por rol y seis lotes de 1000000 tutorías.
@@ -10,7 +19,18 @@
 
 BEGIN;
 
+SET LOCAL lock_timeout = '10s';
 SELECT pg_advisory_xact_lock(23004);
+SELECT pg_advisory_xact_lock(24000);
+LOCK TABLE public.tutorias, public.calificaciones IN SHARE ROW EXCLUSIVE MODE;
+DO $calificaciones_vacias$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.tutorias)
+       AND EXISTS (SELECT 1 FROM public.calificaciones) THEN
+        RAISE EXCEPTION 'La carga nueva requiere calificaciones vacías.';
+    END IF;
+END;
+$calificaciones_vacias$;
 
 DO $destino$
 BEGIN
@@ -57,7 +77,7 @@ CREATE TABLE IF NOT EXISTS pt23_dataset.configuracion (
     id integer PRIMARY KEY CHECK (id = 1),
     usuarios_por_rol integer NOT NULL CHECK (usuarios_por_rol IN (1000, 100000)),
     registros_por_lote integer NOT NULL,
-    version_generador integer NOT NULL CHECK (version_generador = 3),
+    version_generador integer NOT NULL CHECK (version_generador = 4),
     CHECK (registros_por_lote = usuarios_por_rol * 10)
 );
 
@@ -94,7 +114,7 @@ BEGIN
         CROSS JOIN pt23_config solicitada
         WHERE guardada.usuarios_por_rol <> solicitada.usuarios_por_rol
            OR guardada.registros_por_lote <> solicitada.registros_por_lote
-           OR guardada.version_generador <> 3
+           OR guardada.version_generador <> 4
     ) THEN
         RAISE EXCEPTION
             'La configuración difiere de la ejecución iniciada. Preparar una base limpia para cambiar entre piloto y definitiva.';
@@ -119,12 +139,12 @@ ALTER TABLE pt23_dataset.configuracion
 
 ALTER TABLE pt23_dataset.configuracion
     ADD CONSTRAINT configuracion_version_generador_check
-        CHECK (version_generador = 3);
+        CHECK (version_generador = 4);
 
 INSERT INTO pt23_dataset.configuracion (
     id, usuarios_por_rol, registros_por_lote, version_generador
 )
-SELECT 1, usuarios_por_rol, registros_por_lote, 3
+SELECT 1, usuarios_por_rol, registros_por_lote, 4
 FROM pt23_config
 ON CONFLICT (id) DO NOTHING;
 
@@ -324,6 +344,7 @@ DECLARE
     inicio_lote timestamptz;
     fin_lote timestamptz;
     insertadas bigint;
+    calificaciones_insertadas bigint;
     desde bigint;
     hasta bigint;
 BEGIN
@@ -374,7 +395,7 @@ BEGIN
                 ELSE 'rechazada'
             END AS estado
         FROM numeracion
-    )
+    ), tutorias_insertadas AS (
     INSERT INTO public.tutorias (
         "alumnoId",
         "profesorId",
@@ -537,9 +558,51 @@ BEGIN
                 ) + horario.hora_inicio + calendario.desplazamiento
             ) AT TIME ZONE 'America/Argentina/Buenos_Aires'
             AS fecha
-    ) fechas;
+    ) fechas
+    RETURNING id, estado, pagada, "fechaHora"
+    ), finalizadas AS (
+        -- Solo ordena las finalizadas del lote recién insertado.
+        -- No depende del orden de salida de RETURNING ni de IDs sin huecos.
+        SELECT id, "fechaHora", row_number() OVER (ORDER BY id) AS numero
+        FROM tutorias_insertadas
+        WHERE estado = 'finalizada' AND pagada
+    ), puntuadas AS (
+        SELECT id, "fechaHora",
+            CASE
+                WHEN ((numero - 1) * 37) % 100 < 5 THEN 1
+                WHEN ((numero - 1) * 37) % 100 < 15 THEN 2
+                WHEN ((numero - 1) * 37) % 100 < 35 THEN 3
+                WHEN ((numero - 1) * 37) % 100 < 65 THEN 4
+                ELSE 5
+            END AS puntuacion
+        FROM finalizadas
+    ), calificaciones_nuevas AS (
+        INSERT INTO public.calificaciones (
+            "tutoriaId", calificacion, comentario, "createdAt", "updatedAt"
+        )
+        SELECT id, puntuacion,
+            CASE puntuacion
+                WHEN 1 THEN 'Necesito una explicación más clara de los temas.'
+                WHEN 2 THEN 'La clase resolvió algunas de mis dudas.'
+                WHEN 3 THEN 'La explicación fue adecuada.'
+                WHEN 4 THEN 'La clase fue clara y útil.'
+                ELSE 'Excelente explicación y acompañamiento.'
+            END,
+            "fechaHora" + interval '1 hour',
+            "fechaHora" + interval '1 hour'
+        FROM puntuadas
+        RETURNING id
+    )
+    SELECT (SELECT count(*) FROM tutorias_insertadas),
+           (SELECT count(*) FROM calificaciones_nuevas)
+    INTO insertadas, calificaciones_insertadas;
 
-    GET DIAGNOSTICS insertadas = ROW_COUNT;
+    IF calificaciones_insertadas <> cantidad_lote::bigint * 6 / 10 THEN
+        RAISE EXCEPTION 'Se esperaban % calificaciones y se insertaron %.',
+            cantidad_lote::bigint * 6 / 10, calificaciones_insertadas;
+    END IF;
+    RAISE NOTICE 'Calificaciones insertadas en lote %: %.',
+        numero_lote, calificaciones_insertadas;
 
     IF insertadas <> cantidad_lote THEN
         RAISE EXCEPTION
@@ -590,3 +653,15 @@ SELECT
     duracion
 FROM pt23_dataset.lotes
 ORDER BY lote;
+
+-- Totales esperados según los lotes confirmados (sin escanear tablas completas).
+SELECT SUM(registros) AS tutorias_confirmadas,
+       SUM(registros)::bigint * 6 / 10 AS calificaciones_confirmadas_esperadas
+FROM pt23_dataset.lotes;
+
+-- Ejecutar UNA VEZ al terminar los seis lotes:
+-- ANALYZE public.tutorias;
+-- ANALYZE public.calificaciones;
+-- SELECT calificacion, count(*) FROM public.calificaciones
+-- GROUP BY calificacion ORDER BY calificacion;
+-- Definitiva: 1=180000, 2=360000, 3=720000, 4=1080000, 5=1260000.
