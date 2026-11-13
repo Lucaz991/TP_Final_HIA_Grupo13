@@ -33,8 +33,8 @@ export class TutoriaService {
     return this.http.post(this.apiUrl, datosTutoria);
   }
 
-  obtenerTutorias(): Observable<any> {
-    return this.http.get(this.apiUrl);
+  obtenerTutorias(page = 1): Observable<any> {
+    return this.http.get(this.apiUrl, { params: { page, limit: 50 } });
   }
 
   responderTutoria(id: number, estadoActualizado: any): Observable<any> {

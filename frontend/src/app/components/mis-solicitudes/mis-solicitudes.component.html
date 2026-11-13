@@ -5,6 +5,16 @@
         <p class="texto-secundario mb-0">{{ universidad }} &bull; {{ carrera }}</p>
     </div>
 
+    <nav class="d-flex flex-wrap align-items-center gap-3 mb-3" aria-label="Páginas de mis tutorías">
+        <button class="btn btn-outline-secondary btn-sm" [disabled]="cargandoTutorias || paginaTutorias <= 1" (click)="cargarTutorias(paginaTutorias - 1)">Anterior</button>
+        <span>Página {{ paginaTutorias }} de {{ totalPaginasTutorias || 1 }}</span>
+        <button class="btn btn-outline-secondary btn-sm" [disabled]="cargandoTutorias || paginaTutorias >= totalPaginasTutorias" (click)="cargarTutorias(paginaTutorias + 1)">Siguiente</button>
+        <button class="btn btn-outline-secondary btn-sm" [disabled]="cargandoTutorias" (click)="cargarTutorias()">Actualizar</button>
+    </nav>
+    <p class="text-muted small">Los indicadores y gráficos de tutorías corresponden a la página seleccionada.</p>
+    @if (errorTutorias) { <p class="alert alert-danger" role="alert">{{ errorTutorias }}</p> }
+    @if (cargandoTutorias) { <p role="status">Cargando tutorías...</p> }
+
     @if (rol === 'alumno') {
     <!-- Panel del Alumno -->
     <div class="row g-4 mb-4">
