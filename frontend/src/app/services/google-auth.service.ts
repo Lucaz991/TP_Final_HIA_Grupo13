@@ -8,7 +8,7 @@ declare const google: any;
 })
 export class GoogleAuthService {
 
-  private clientId = '514983060587-l7mo7rrdidk3p0l1skhemau7lmddajvi.apps.googleusercontent.com';
+  private clientId = '139690185407-f014201joprrmhlrgimg036r6a262po3.apps.googleusercontent.com';
   
   private inicializado = false;
   private currentCallback?: (response: any) => void;
