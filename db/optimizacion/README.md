@@ -5,7 +5,7 @@ La entrega crea seis índices definitivos y proporciona ocho consultas para medi
 ## Instalar después del dataset
 
 1. Completar los scripts de db/dataset/6M y levantar el esquema de la aplicación. Mantener el backend detenido durante la creación de índices y las mediciones.
-2. Si faltan las 600.000 calificaciones, ejecutar 00_preparar_calificaciones.sql por lotes según su cabecera. Si ya están cargadas, continuar.
+2. Para cargas nuevas, usar [05_tutorias_y_calificaciones.sql](../dataset/6M/05_tutorias_y_calificaciones.sql) según [las instrucciones del dataset](../dataset/6M/README.md). La versión 4 genera conjuntamente 6.000.000 de tutorías y 3.600.000 calificaciones. Verificar las calificaciones y ejecutar `ANALYZE public.calificaciones` antes de medir. El script separado `00_preparar_calificaciones.sql` fue retirado; no hace falta una segunda carga de calificaciones. El generador unificado no completa datasets anteriores.
 3. Ejecutar 03_indices.sql completo una sola vez. Crea los seis índices con los nombres definitivos dentro de una transacción. El archivo puede bloquear escrituras mientras construye los índices. Ante un error ejecutar ROLLBACK y revisar el mensaje. Las instalaciones que ya tienen el conjunto final pueden verificarlo con 06_tamanos_indices.sql.
 4. Ejecutar por separado las dos consultas de 05_validaciones.sql. Para Q06 se esperan cero diferencias. Para Q07 se espera 100 | 100 | true.
 5. Ejecutar cada bloque de 04_mediciones_posteriores.sql tres veces y conservar los planes. Q07 mide la primera página. Los parámetros principales son alumno 1, profesor 10001 y categoría 1. Verificarlos en 01_consultas_originales.sql al reproducir en otra instalación.
@@ -54,7 +54,7 @@ El contexto registrado es tpFinal, PostgreSQL 16, zona Etc/UTC, año 2026 y work
 
 ## Conjunto de prueba y parámetros
 
-El dataset preparado contiene 6.000.000 de tutorías, 200.002 usuarios, 100 categorías, 10 precios, 400.000 asignaciones profesor/categoría y 400.000 horarios. Se cargaron además 600.000 calificaciones para evaluar los JOIN con opiniones. Las tablas auxiliares de solicitudes, respuestas y auditorías no forman parte de las consultas seleccionadas.
+El dataset preparado contiene 6.000.000 de tutorías, 200.002 usuarios, 100 categorías, 10 precios, 400.000 asignaciones profesor/categoría y 400.000 horarios. Las mediciones históricas de este informe utilizaron 600.000 calificaciones para evaluar los JOIN con opiniones. La nueva carga unificada prevé 3.600.000 calificaciones, una por cada tutoría finalizada y pagada. Es necesario volver a medir planes, tiempos y tamaños con ese volumen; los resultados históricos no se trasladan automáticamente al nuevo dataset. Las tablas auxiliares de solicitudes, respuestas y auditorías no forman parte de las consultas seleccionadas.
 
 | Parámetro | Valor |
 | --- | --- |
@@ -66,7 +66,7 @@ El dataset preparado contiene 6.000.000 de tutorías, 200.002 usuarios, 100 cate
 | Categoría principal | ID 1 |
 | Categorías de los profesores de referencia | 1, 2, 3 y 4 |
 
-La carga de calificaciones usa una distribución prevista de 5%, 10%, 20%, 30% y 35% para las puntuaciones de 1 a 5. Adjuntar el conteo final de esa distribución como validación del conjunto utilizado.
+La carga de calificaciones conserva una distribución prevista de 5 %, 10 %, 20 %, 30 % y 35 % para las puntuaciones de 1 a 5. En la nueva carga definitiva corresponde a 180.000, 360.000, 720.000, 1.080.000 y 1.260.000 filas, respectivamente. Adjuntar los conteos reales y especificar la versión del dataset utilizada en cada medición.
 
 ## Consultas seleccionadas
 
