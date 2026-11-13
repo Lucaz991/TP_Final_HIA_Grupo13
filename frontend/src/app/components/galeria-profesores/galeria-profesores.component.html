@@ -11,7 +11,7 @@
         <label for="categoriaSelect"
           class="form-label fw-semibold small texto-mutado mb-2 text-uppercase espaciado-letras">Filtrar por
           especialidad</label>
-        <select id="categoriaSelect" class="form-select select-sobrio shadow-none" [(ngModel)]="filtroCategoria">
+        <select id="categoriaSelect" class="form-select select-sobrio shadow-none" [(ngModel)]="filtroCategoria" (ngModelChange)="cargarProfesores()">
           <option value="">Todas las especialidades</option>
           @for (cat of categorias; track cat.id) {
           <option [value]="cat.id">{{ cat.nombre }} - {{ cat.nivel }}</option>
@@ -56,6 +56,12 @@
           </div>
         </div>
       </div>
+      }
+      @if (cargando) { <p role="status">Cargando profesores...</p> }
+      @if (errorCarga) {
+        <div class="alert alert-danger" role="alert">{{ errorCarga }}
+          <button class="btn btn-outline-danger btn-sm" (click)="cargarProfesores(pagina)">Reintentar</button>
+        </div>
       }
       @for (profesor of profesoresFiltrados; track profesor.id) {
       <div class="col-md-6">
@@ -186,5 +192,10 @@
       </div>
       }
     </div>
+    <nav class="d-flex justify-content-center align-items-center gap-3 my-4" aria-label="Páginas de profesores">
+      <button class="btn btn-outline-secondary" [disabled]="cargando || pagina <= 1" (click)="cargarProfesores(pagina - 1)">Anterior</button>
+      <span>Página {{ pagina }} de {{ totalPaginas || 1 }} · {{ totalProfesores }} profesores</span>
+      <button class="btn btn-outline-secondary" [disabled]="cargando || pagina >= totalPaginas" (click)="cargarProfesores(pagina + 1)">Siguiente</button>
+    </nav>
   </div>
 </div>

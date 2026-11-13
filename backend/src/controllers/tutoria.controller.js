@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const Tutoria = require('../models/tutoria.model');
 const Usuario = require('../models/usuario.model');
 const Categoria = require('../models/categoria.model'); 
@@ -46,16 +47,26 @@ module.exports = solicitudCtrl;
 
 tutoriaCtrl.getTutorias = async (req, res) => {
     /* #swagger.tags = ['Tutorias']
-       #swagger.summary = 'Listar todas las tutorías'
-       #swagger.description = 'Obtiene el listado completo de todas las tutorías registradas, incluyendo información del alumno, profesor, categoría y calificación.'
+       #swagger.summary = 'Listar una página de tutorías del usuario autenticado'
+       #swagger.description = 'Obtiene hasta 100 tutorías del usuario autenticado, incluyendo información del alumno, profesor, categoría y calificación.'
        #swagger.responses[200] = {
            description: 'Listado obtenido con éxito.',
            schema: { $ref: '#/definitions/TutoriaResponse' }
        }
        #swagger.responses[500] = { description: 'Error del servidor.' }
     */
+    const page = Number(req.query.page || 1), limit = Number(req.query.limit || 50);
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100
+        || !Number.isSafeInteger((page - 1) * limit)) {
+        return res.status(400).json({ status: 0, msg: 'Paginación inválida.' });
+    }
+    if (!req.userId) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
     try {
-        const tutorias = await Tutoria.findAll({
+        // Filtrar por el usuario del JWT antes de consultar; nunca descargar el dataset global.
+        const where = { [Op.or]: [{ alumnoId: req.userId }, { profesorId: req.userId }] };
+        const total = await Tutoria.count({ where });
+        const tutorias = await Tutoria.findAll({ where, limit, offset: (page - 1) * limit, subQuery: true,
+            order: [['createdAt', 'DESC'], ['id', 'DESC']],
             include: [
                 { model: Usuario, as: 'alumno', attributes: ['id', 'nombre', 'apellido', 'email'] },
                 { model: Usuario, as: 'profesor', attributes: ['id', 'nombre', 'apellido', 'email'] },
@@ -63,9 +74,10 @@ tutoriaCtrl.getTutorias = async (req, res) => {
                 { model: Calificacion, as: 'calificacion' }
             ]
         });
-        if (!tutorias) return res.json({ status: 0, msg: 'Tutoría no encontrada' });
-        res.json({ status: 1, msg: 'success', data: tutorias });
+        res.json({ status: 1, msg: 'success', data: tutorias,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ status: 0, msg: 'Error al obtener tutorías' });
     }
 };

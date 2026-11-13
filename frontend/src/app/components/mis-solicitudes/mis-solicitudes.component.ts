@@ -17,6 +17,10 @@ import Swal from 'sweetalert2';
   styleUrl: './mis-solicitudes.component.css',
 })
 export class MisSolicitudesComponent implements OnInit {
+  paginaTutorias = 1;
+  totalPaginasTutorias = 0;
+  cargandoTutorias = false;
+  errorTutorias = '';
   rol: string = '';
   usuarioId: number = 0;
   nombreCompleto: string = '';
@@ -118,10 +122,15 @@ export class MisSolicitudesComponent implements OnInit {
     }
   }
 
-  cargarTutorias() {
-    this.tutoriaService.obtenerTutorias().subscribe({
+  cargarTutorias(pagina = this.paginaTutorias) {
+    if (this.cargandoTutorias) return;
+    this.cargandoTutorias = true;
+    this.errorTutorias = '';
+    this.paginaTutorias = pagina;
+    this.tutoriaService.obtenerTutorias(pagina).subscribe({
       next: (res: any) => {
         if (res && res.data) {
+          this.totalPaginasTutorias = res.pagination?.totalPages || 0;
           const allTutorias = res.data || [];
           if (this.rol === 'alumno') {
             this.misTutorias = allTutorias.filter((t: any) => t.alumnoId === this.usuarioId);
@@ -131,10 +140,13 @@ export class MisSolicitudesComponent implements OnInit {
             this.actualizarMetricasProfesor();
           }
         }
+        this.cargandoTutorias = false;
         this.cdr.detectChanges();
       },
       error: (err) => {
         console.error('Error al obtener tutorías:', err);
+        this.errorTutorias = 'No se pudieron cargar las tutorías. Intentá nuevamente.';
+        this.cargandoTutorias = false;
         this.cdr.detectChanges();
       }
     });

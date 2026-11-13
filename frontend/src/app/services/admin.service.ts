@@ -1,7 +1,13 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { PaginatedResponse, FullTutorial, FullUsuarioDashboard } from '../models/dashboard.class';
+
 import { environment } from '../../environments/environment';
+
+export interface AdminTableQuery {
+  start: number; limit: number; search: string; sort: string; direction: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -38,14 +44,14 @@ export class AdminService {
     return this.http.get(`${this.apiUrl}/tutorials-by-month`);
   }
 
-  // Obtiene el listado completo de tutorías para la tabla
-  getFullTutorials(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/full-tutorials`);
+  // Obtiene una página del listado de tutorías para la tabla
+  getFullTutorials(query: AdminTableQuery): Observable<PaginatedResponse<FullTutorial>> {
+    return this.http.get<PaginatedResponse<FullTutorial>>(`${this.apiUrl}/full-tutorials`, { params: { ...query } });
   }
 
-  // Obtiene el listado completo de usuarios para la tabla
-  getUsers(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/users`);
+  // Obtiene una página del listado de usuarios para la tabla
+  getUsers(query: AdminTableQuery): Observable<PaginatedResponse<FullUsuarioDashboard>> {
+    return this.http.get<PaginatedResponse<FullUsuarioDashboard>>(`${this.apiUrl}/users`, { params: { ...query } });
   }
 
   // Actualiza los datos principales de un usuario (admin)

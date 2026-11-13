@@ -1,4 +1,4 @@
-const { fn, col, literal, Op } = require('sequelize');
+const { fn, col, literal, Op, cast, where: sqlWhere } = require('sequelize');
 const Usuario = require('../models/usuario.model');
 const Tutoria = require('../models/tutoria.model');
 const SolicitudAyuda = require('../models/solicitudes/solicitudAyuda.model');
@@ -6,6 +6,39 @@ const Categoria = require('../models/categoria.model');
 const Calificacion = require('../models/calificacion.model');
 
 const adminCtrl = {};
+
+function pageOptions(query, columns, defaultColumn) {
+    const integer = (value, fallback, min, max) => {
+        if (value === undefined) return fallback;
+        if (!/^\d+$/.test(String(value))) throw new Error('Paginación inválida');
+        const n = Number(value);
+        if (!Number.isSafeInteger(n) || n < min || n > max) throw new Error('Paginación inválida');
+        return n;
+    };
+    const limit = integer(query.limit, 50, 1, 100);
+    const page = integer(query.page, 1, 1, Number.MAX_SAFE_INTEGER);
+    const offset = query.start === undefined ? (page - 1) * limit
+        : integer(query.start, 0, 0, Number.MAX_SAFE_INTEGER);
+    if (!Number.isSafeInteger(offset)) throw new Error('Paginación inválida');
+    const column = columns[query.sort] || columns[defaultColumn];
+    const direction = query.direction === 'asc' ? 'ASC' : 'DESC';
+    const order = [[...column, direction]];
+    if (query.sort !== 'id') order.push(['id', direction]);
+    const search = typeof query.search === 'string' ? query.search.trim().slice(0, 100) : '';
+    return { limit, offset, order, search, page: Math.floor(offset / limit) + 1 };
+}
+
+function searchWhere(search, fields) {
+    // Sequelize escapa los valores; CAST permite buscar también enums e IDs.
+    return search ? { [Op.or]: fields.map(field =>
+        sqlWhere(cast(col(field), 'text'), { [Op.iLike]: `%${search}%` })) } : {};
+}
+
+function paginatedResponse(res, data, total, filtered, options) {
+    res.json({ status: 1, msg: 'success', data, recordsTotal: total,
+        recordsFiltered: filtered, pagination: { page: options.page,
+            limit: options.limit, total: filtered, totalPages: Math.ceil(filtered / options.limit) } });
+}
 
 // Números generales para las cards
 adminCtrl.getSummary = async (req, res) => {
@@ -31,7 +64,14 @@ adminCtrl.getSummary = async (req, res) => {
     */
     try {
         const totalUsers = await Usuario.count();
-        const totalTutorials = await Tutoria.count();
+        const financial = await Tutoria.findOne({ raw: true, attributes: [
+            [fn('COUNT', col('id')), 'totalTutorials'],
+            [literal('COALESCE(SUM(CASE WHEN pagada THEN "precioAcordado" ELSE 0 END), 0)'), 'totalRevenue'],
+            [literal(`COALESCE(SUM(CASE WHEN NOT pagada AND estado::text NOT IN ('rechazada', 'cancelada') THEN "precioAcordado" ELSE 0 END), 0)`), 'pendingRevenue'],
+            [fn('AVG', col('precioAcordado')), 'averagePrice'],
+            [literal('COALESCE(100.0 * COUNT(*) FILTER (WHERE pagada) / NULLIF(COUNT(*), 0), 0)'), 'paymentRate']
+        ] });
+        const totalTutorials = Number(financial.totalTutorials);
         const totalHelpRequests = await SolicitudAyuda.count();
         const totalCategories = await Categoria.count();
         const avgRatingResult = await Calificacion.findOne({
@@ -44,7 +84,9 @@ adminCtrl.getSummary = async (req, res) => {
         res.json({
             status: 1,
             msg: 'success',
-            data: { totalUsers, totalTutorials, totalHelpRequests, totalCategories, avgRating }
+            data: { totalUsers, totalTutorials, totalHelpRequests, totalCategories, avgRating,
+                totalRevenue: Number(financial.totalRevenue), pendingRevenue: Number(financial.pendingRevenue),
+                averagePrice: Number(financial.averagePrice || 0), paymentRate: Number(financial.paymentRate) }
         });
     } catch (error) {
         console.error(error);
@@ -181,8 +223,8 @@ adminCtrl.getTutorialsByMonth = async (req, res) => {
 // Listado completo de tutorías para DataTable
 adminCtrl.getFullTutorials = async (req, res) => {
     /* #swagger.tags = ['Admin']
-       #swagger.summary = 'Listado completo de tutorías'
-       #swagger.description = 'Retorna el listado detallado de todas las tutorías, incluyendo alumno, profesor, categoría y calificación. Útil para DataTables.'
+       #swagger.summary = 'Listado paginado de tutorías'
+       #swagger.description = 'Retorna una página de hasta 100 tutorías, incluyendo alumno, profesor, categoría y calificación. Útil para DataTables.'
        #swagger.security = [{ bearerAuth: [] }]
        #swagger.responses[200] = {
          description: 'Tutorías obtenidas correctamente.',
@@ -190,21 +232,39 @@ adminCtrl.getFullTutorials = async (req, res) => {
        }
        #swagger.responses[500] = { description: 'Error al obtener tutorías.' }
     */
+    let options;
     try {
-        const data = await Tutoria.findAll({
-            attributes: [
-                'id', 'modalidad', 'precioAcordado', 'fechaHora',
-                'estado', 'enlaceMeet', 'pagada', 'createdAt'
-            ],
-            include: [
-                { model: Usuario, as: 'alumno', attributes: ['id', 'nombre', 'apellido', 'email'] },
-                { model: Usuario, as: 'profesor', attributes: ['id', 'nombre', 'apellido', 'email'] },
-                { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
-                { model: Calificacion, as: 'calificacion', attributes: ['calificacion', 'comentario'], required: false }
-            ],
-            order: [['createdAt', 'DESC']]
-        });
-        res.json({ status: 1, msg: 'success', data });
+        options = pageOptions(req.query, {
+            id: ['id'], alumno: [{ model: Usuario, as: 'alumno' }, 'nombre'],
+            profesor: [{ model: Usuario, as: 'profesor' }, 'nombre'],
+            categoria: [{ model: Categoria, as: 'categoria' }, 'nombre'],
+            modalidad: ['modalidad'], estado: ['estado'], pagada: ['pagada'],
+            precioAcordado: ['precioAcordado'], fechaHora: ['fechaHora'], createdAt: ['createdAt']
+        }, 'createdAt');
+    } catch (error) { return res.status(400).json({ status: 0, msg: error.message }); }
+    try {
+        const include = [
+            { model: Usuario, as: 'alumno', attributes: ['id', 'nombre', 'apellido', 'email'] },
+            { model: Usuario, as: 'profesor', attributes: ['id', 'nombre', 'apellido', 'email'] },
+            { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] }
+        ];
+        const where = searchWhere(options.search, ['Tutoria.id', 'Tutoria.estado', 'Tutoria.modalidad',
+            'alumno.nombre', 'alumno.apellido', 'alumno.email',
+            'profesor.nombre', 'profesor.apellido', 'profesor.email', 'categoria.nombre']);
+        const total = await Tutoria.count();
+        const filtered = options.search ? await Tutoria.count({ where, include, distinct: true }) : total;
+        // Seleccionar como máximo 100 IDs antes de cargar las calificaciones y demás atributos.
+        const page = await Tutoria.findAll({ attributes: ['id'], where,
+            include: include.map(item => ({ ...item, attributes: [] })),
+            order: options.order, limit: options.limit, offset: options.offset, subQuery: false });
+        const rows = page.length ? await Tutoria.findAll({
+            attributes: ['id', 'modalidad', 'precioAcordado', 'fechaHora', 'estado', 'enlaceMeet', 'pagada', 'createdAt'],
+            where: { id: { [Op.in]: page.map(row => row.id) } },
+            include: [...include, { model: Calificacion, as: 'calificacion',
+                attributes: ['calificacion', 'comentario'], required: false }]
+        }) : [];
+        const byId = new Map(rows.map(row => [row.id, row]));
+        paginatedResponse(res, page.map(row => byId.get(row.id)).filter(Boolean), total, filtered, options);
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: 0, msg: 'Error al obtener tutorías' });
@@ -215,7 +275,7 @@ adminCtrl.getFullTutorials = async (req, res) => {
 adminCtrl.getUsers = async (req, res) => {
     /* #swagger.tags = ['Admin']
        #swagger.summary = 'Listado de usuarios'
-       #swagger.description = 'Retorna todos los usuarios registrados con sus atributos principales.'
+       #swagger.description = 'Retorna una página de hasta 100 usuarios con sus atributos principales.'
        #swagger.security = [{ bearerAuth: [] }]
        #swagger.responses[200] = {
          description: 'Usuarios obtenidos correctamente.',
@@ -223,15 +283,20 @@ adminCtrl.getUsers = async (req, res) => {
        }
        #swagger.responses[500] = { description: 'Error al obtener usuarios.' }
     */
+    let options;
     try {
-        const data = await Usuario.findAll({
-            attributes: [
-                'id', 'nombre', 'apellido', 'email', 'rol', 'estado', 
-                'universidad', 'carrera', 'genero', 'ubicacion', 'createdAt'
-            ],
-            order: [['createdAt', 'DESC']]
-        });
-        res.json({ status: 1, msg: 'success', data });
+        options = pageOptions(req.query, Object.fromEntries(
+            ['id', 'nombre', 'rol', 'estado', 'universidad', 'carrera', 'createdAt'].map(key => [key, [key]])
+        ), 'createdAt');
+    } catch (error) { return res.status(400).json({ status: 0, msg: error.message }); }
+    try {
+        const where = searchWhere(options.search, ['id', 'nombre', 'apellido', 'email', 'rol', 'estado', 'universidad', 'carrera']);
+        const total = await Usuario.count();
+        const filtered = options.search ? await Usuario.count({ where }) : total;
+        const data = await Usuario.findAll({ where, limit: options.limit, offset: options.offset,
+            attributes: ['id', 'nombre', 'apellido', 'email', 'rol', 'estado', 'universidad', 'carrera', 'genero', 'ubicacion', 'createdAt'],
+            order: options.order });
+        paginatedResponse(res, data, total, filtered, options);
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: 0, msg: 'Error al obtener usuarios' });

@@ -1,3 +1,4 @@
+const { Op, fn, col, literal } = require('sequelize');
 const Usuario = require('../models/usuario.model');
 const Categoria = require('../models/categoria.model');
 const HorarioDisponible = require('../models/horarioDisponible.model');
@@ -8,7 +9,7 @@ const usuarioCtrl = {};
 usuarioCtrl.getUsuarios = async (req, res) => {
     /* #swagger.tags = ['Usuarios']
        #swagger.summary = 'Listar usuarios o profesores'
-       #swagger.description = 'Retorna todos los usuarios registrados. Permite filtrar por rol (ej. ?rol=profesor) para obtener sus tutorías dictadas, opiniones y rating.'
+       #swagger.description = 'Retorna una página de hasta 100 usuarios. Permite filtrar por rol (ej. ?rol=profesor) para obtener sus tutorías dictadas, opiniones y rating.'
        #swagger.parameters['rol'] = {
          in: 'query',
          description: 'Filtrar por rol: alumno, profesor, admin.',
@@ -21,76 +22,72 @@ usuarioCtrl.getUsuarios = async (req, res) => {
        }
        #swagger.responses[500] = { description: 'Error al obtener los usuarios.' }
     */
-    try {
-        const { rol } = req.query;
-        const whereClause = rol ? { rol } : {};
-        const include = [];
-
-        if (!rol || rol === 'profesor') {
-            include.push({
-                model: Categoria,
-                as: 'categoriasEnseniadas',
-                attributes: ['id', 'nombre'],
-                through: { attributes: [] }
-            });
-            include.push({ model: HorarioDisponible, as: 'horarios' });
+    const positive = value => /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 12);
+    if (!positive(page) || !positive(limit) || limit > 100 || !Number.isSafeInteger((page - 1) * limit)
+        || (req.query.id !== undefined && !positive(req.query.id))
+        || (req.query.categoriaId && !positive(req.query.categoriaId))
+        || (req.query.rol && !['profesor', 'alumno', 'admin'].includes(req.query.rol))) {
+        return res.status(400).json({ status: 0, msg: 'Filtros o paginación inválidos.' });
+    }
+    let order = [['id', 'ASC']];
+    if (req.query.orden === 'cercania') {
+        const lat = Number(req.query.lat), lng = Number(req.query.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180
+            || req.query.lat === '' || req.query.lng === '') {
+            return res.status(400).json({ status: 0, msg: 'Coordenadas inválidas.' });
         }
-
-        const usuarios = await Usuario.findAll({
-            where: whereClause,
-            include: include,
-            attributes: {
-                exclude: ['createdAt', 'updatedAt']
-            }
-        });
-
+        // Coseno del ángulo central: orden global por cercanía, antes de paginar.
+        order = [[literal(`(sin(radians(${lat})) * sin(radians("Usuario".lat)) + cos(radians(${lat})) * cos(radians("Usuario".lat)) * cos(radians("Usuario".lng - ${lng})))`), 'DESC NULLS LAST'], ['id', 'ASC']];
+    }
+    try {
+        const where = req.query.rol ? { rol: req.query.rol } : {};
+        if (req.query.id) where.id = Number(req.query.id);
+        if (req.query.categoriaId) {
+            where[Op.and] = literal(`EXISTS (SELECT 1 FROM profesores_categorias pc WHERE pc."profesorId" = "Usuario".id AND pc."categoriaId" = ${Number(req.query.categoriaId)})`);
+        }
+        const total = await Usuario.count({ where });
+        const ids = await Usuario.findAll({ where, attributes: ['id'], order, limit, offset: (page - 1) * limit });
+        const include = [
+            { model: Categoria, as: 'categoriasEnseniadas', attributes: ['id', 'nombre'], through: { attributes: [] } },
+            { model: HorarioDisponible, as: 'horarios' }
+        ];
+        const users = ids.length ? await Usuario.findAll({
+            where: { id: { [Op.in]: ids.map(u => u.id) } }, include,
+            attributes: { exclude: ['contraseniaHash', 'createdAt', 'updatedAt'] }
+        }) : [];
+        const byId = new Map(users.map(u => [u.id, u.toJSON()]));
+        const data = ids.map(u => byId.get(u.id)).filter(Boolean);
         const Tutoria = require('../models/tutoria.model');
         const Calificacion = require('../models/calificacion.model');
-
-        const usuariosData = [];
-        for (const u of usuarios) {
-            const userJson = u.toJSON();
-            if (userJson.rol === 'profesor') {
-                const tutorias = await Tutoria.findAll({
-                    where: {
-                        profesorId: userJson.id,
-                        estado: 'finalizada'
-                    },
-                    include: [
-                        { model: Calificacion, as: 'calificacion' },
-                        { model: Usuario, as: 'alumno', attributes: ['nombre', 'apellido'] }
-                    ]
-                });
-
-                userJson.tutoriasDictadas = tutorias.length;
-
-                const opiniones = [];
-                const calificaciones = [];
-                for (const t of tutorias) {
-                    if (t.calificacion) {
-                        calificaciones.push(t.calificacion);
-                        opiniones.push({
-                            id: t.calificacion.id,
-                            calificacion: t.calificacion.calificacion,
-                            comentario: t.calificacion.comentario,
-                            fecha: t.calificacion.createdAt,
-                            alumno: t.alumno ? `${t.alumno.nombre} ${t.alumno.apellido}` : 'Alumno'
-                        });
-                    }
-                }
-                userJson.opiniones = opiniones;
-
-                if (calificaciones.length > 0) {
-                    const suma = calificaciones.reduce((sum, c) => sum + c.calificacion, 0);
-                    userJson.rating = parseFloat((suma / calificaciones.length).toFixed(1));
-                } else {
-                    userJson.rating = 0.0;
-                }
-            }
-            usuariosData.push(userJson);
+        const profesores = data.filter(u => u.rol === 'profesor');
+        // Agregación SQL: no materializar las tutorías dictadas en Node.
+        const stats = profesores.length ? await Tutoria.findAll({
+            where: { profesorId: { [Op.in]: profesores.map(u => u.id) }, estado: 'finalizada' },
+            attributes: ['profesorId', [fn('COUNT', fn('DISTINCT', col('Tutoria.id'))), 'cantidad'],
+                [fn('AVG', col('calificacion.calificacion')), 'rating']],
+            include: [{ model: Calificacion, as: 'calificacion', attributes: [], required: false }],
+            group: ['profesorId'], raw: true
+        }) : [];
+        const statsById = new Map(stats.map(row => [Number(row.profesorId), row]));
+        for (const profesor of profesores) {
+            const stat = statsById.get(profesor.id);
+            profesor.tutoriasDictadas = Number(stat?.cantidad || 0);
+            profesor.rating = Number(Number(stat?.rating || 0).toFixed(1));
+            // La interfaz muestra dos opiniones: recuperar únicamente esas dos.
+            const recientes = await Tutoria.findAll({
+                attributes: ['id'], where: { profesorId: profesor.id, estado: 'finalizada' },
+                include: [{ model: Calificacion, as: 'calificacion', required: true },
+                    { model: Usuario, as: 'alumno', attributes: ['nombre', 'apellido'] }],
+                order: [['id', 'DESC']], limit: 2, subQuery: false
+            });
+            profesor.opiniones = recientes.map(t => ({ id: t.calificacion.id,
+                calificacion: t.calificacion.calificacion, comentario: t.calificacion.comentario,
+                fecha: t.calificacion.createdAt,
+                alumno: t.alumno ? `${t.alumno.nombre} ${t.alumno.apellido}` : 'Alumno' }));
         }
-
-        res.json(usuariosData);
+        res.json({ data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: '0', msg: 'Error al obtener los usuarios.' });
