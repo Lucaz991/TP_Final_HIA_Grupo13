@@ -255,7 +255,7 @@ services:
       - redtpfinal
 
   nextcloud:
-    image: nextcloud:31-apache
+    image: nextcloud:latest
     ports:
       - "127.0.0.1:8082:80"
     depends_on:
@@ -342,7 +342,7 @@ services:
       - redtpfinal
 
   glpi:
-    image: "glpi/glpi:11"
+    image: "glpi/glpi:latest"
     restart: "unless-stopped"
     volumes:
       - glpi_data:/var/glpi
