@@ -152,7 +152,7 @@
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
       "id": 8,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(container_cpu_usage_seconds_total{container=~\"db_node.*|tp_final_hia_grupo13-.*|app-.*|prometheus|grafana\"}[1m]) * 100", "legendFormat": "{{container}}", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]) * 100", "legendFormat": "{{name}}", "refId": "A" }],
       "title": "CPU por Contenedor (%)",
       "type": "timeseries"
     },
@@ -167,7 +167,7 @@
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
       "id": 9,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(container_memory_usage_bytes{container=~\"db_node.*|tp_final_hia_grupo13-.*|app-.*|prometheus|grafana\"}) by (container)", "legendFormat": "{{container}}", "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "container_memory_usage_bytes{name!=\"\"}", "legendFormat": "{{name}}", "refId": "A" }],
       "title": "Memoria por Contenedor (RAM)",
       "type": "timeseries"
     },
@@ -183,7 +183,7 @@
       "id": 10,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_network_receive_bytes_total{container!=\"\",container!=\"POD\"}[1m])) by (container)", "legendFormat": "{{container}} - RX", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_network_receive_bytes_total{name!=\"\"}[1m])) by (name)", "legendFormat": "{{name}} - RX", "refId": "A" }
       ],
       "title": "Red - Tráfico Recibido (RX)",
       "type": "timeseries"
@@ -200,7 +200,7 @@
       "id": 11,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_network_transmit_bytes_total{container!=\"\",container!=\"POD\"}[1m])) by (container)", "legendFormat": "{{container}} - TX", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_network_transmit_bytes_total{name!=\"\"}[1m])) by (name)", "legendFormat": "{{name}} - TX", "refId": "A" }
       ],
       "title": "Red - Tráfico Transmitido (TX)",
       "type": "timeseries"
@@ -217,7 +217,7 @@
       "id": 12,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_fs_reads_bytes_total{container!=\"\",container!=\"POD\"}[1m])) by (container)", "legendFormat": "{{container}} - Lectura", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_fs_reads_bytes_total{name!=\"\"}[1m])) by (name)", "legendFormat": "{{name}} - Lectura", "refId": "A" }
       ],
       "title": "I/O - Lectura de Disco",
       "type": "timeseries"
@@ -234,7 +234,7 @@
       "id": 13,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_fs_writes_bytes_total{container!=\"\",container!=\"POD\"}[1m])) by (container)", "legendFormat": "{{container}} - Escritura", "refId": "A" }
+        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "sum(rate(container_fs_writes_bytes_total{name!=\"\"}[1m])) by (name)", "legendFormat": "{{name}} - Escritura", "refId": "A" }
       ],
       "title": "I/O - Escritura de Disco",
       "type": "timeseries"
@@ -249,5 +249,5 @@
   "timezone": "browser",
   "title": "Clúster PostgreSQL - Monitorización Completa",
   "uid": "cluster-pg-dashboard",
-  "version": 2
+  "version": 3
 }
