@@ -477,6 +477,18 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     networks:
       - redtpfinal
+  # ==========================================
+  # 9. BACKUP DE LA BASE DE DATOS
+  # ==========================================
+  backup:
+    image: postgres:18
+    restart: unless-stopped
+    entrypoint: ["sleep", "infinity"]
+    environment:
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+    networks:
+      - redtpfinal
 
 # declaracion global de los volúmenes
 volumes:
