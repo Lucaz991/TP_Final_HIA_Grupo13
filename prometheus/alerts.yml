@@ -1,4 +1,4 @@
-﻿groups:
+groups:
   - name: cluster_postgres_alerts
     rules:
       # 1. PostgreSQL no responde, aunque el exporter siga activo
@@ -50,3 +50,43 @@
         annotations:
           summary: "Memoria RAM baja en el servidor"
           description: "La memoria disponible en {{ $labels.instance }} es menor al 15% del total."
+
+      # 6. Retraso (lag) en la replicación de PostgreSQL
+      - alert: PostgresReplicationLag
+        expr: pg_stat_replication_pg_wal_lsn_diff{job="postgres-cluster-nodes"} > 16777216
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retraso en la replicación de PostgreSQL"
+          description: "La réplica {{ $labels.application_name }} tiene un lag mayor a 16MB respecto al nodo líder."
+
+      # 7. Pérdida de réplicas en streaming (alta disponibilidad en riesgo)
+      - alert: PostgresReplicasDegraded
+        expr: count(pg_stat_replication_pg_current_wal_lsn_bytes{job="postgres-cluster-nodes"}) < 2
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Réplicas de PostgreSQL degradadas"
+          description: "El clúster tiene menos de 2 réplicas conectadas en streaming al nodo líder."
+
+      # 8. Detección de bloqueos muertos (Deadlocks) en PostgreSQL
+      - alert: PostgresDeadlocksDetected
+        expr: increase(pg_stat_database_deadlocks{job="postgres-cluster-nodes",datname="tpFinal"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deadlock detectado en PostgreSQL"
+          description: "Se han producido interbloqueos (deadlocks) en la base de datos {{ $labels.datname }} del nodo {{ $labels.node }}."
+
+      # 9. Uso elevado de almacenamiento en disco
+      - alert: HostHighDiskUsage
+        expr: (max(container_fs_usage_bytes{device=~"overlay.*"}) / max(container_fs_limit_bytes{device=~"overlay.*"})) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de almacenamiento en disco"
+          description: "El uso de espacio en disco del sistema de contenedores supera el 85%."
