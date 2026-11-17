@@ -35,3 +35,6 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Mediciones originales de rendimiento
+/rendimiento/resultados/
