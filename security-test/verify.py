@@ -164,7 +164,7 @@ const assert = require('node:assert/strict');
 })().catch(() => {process.exitCode = 1;});
 """)
     print("OK Calendar simulado y adaptadores sin llamadas externas")
-    print("Laboratorio verificado. No se ejecutaron SQLi, ZAP ni pruebas completas de H24.")
+    print("Laboratorio verificado. Las pruebas activas se ejecutan solo con flags.")
     return verified_users
 
 
