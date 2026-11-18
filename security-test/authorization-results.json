@@ -1,16 +1,45 @@
 {
-  "timestamp_utc": "2026-11-18T17:13:00.290134+00:00",
-  "source_commit": "29e28d51d5f7df43f1f245cb2dbe76115b56b4a6",
-  "backend_image": "sha256:58d2dabe4d81802fe17ef744442abd0ef775dba7dd2ce086f1b6a667d4a18043",
+  "timestamp_utc": "2026-11-18T18:29:17.597400+00:00",
+  "source_commit": "df03912914192b3d92b3b424c447c6eb2090e5e9",
+  "backend_image": "sha256:d02bb705b3841dadd9ef9211eb1e00d18cc4b9393d2c9524110adaeb2f8354cb",
   "target": "http://127.0.0.1:9081",
   "fixture_ids": [
-    5,
-    6,
-    7,
-    8
+    18,
+    19,
+    20,
+    21,
+    22
   ],
   "fixtures_cleaned": true,
   "results": [
+    {
+      "case": "A crea tutoria a nombre de B",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alta indebida creada: False"
+    },
+    {
+      "case": "A crea su propia tutoria",
+      "expected": "200 pendiente, ignora estado enviado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: pendiente"
+    },
+    {
+      "case": "Alumno acepta su tutoria",
+      "expected": "403 sin cambio de estado",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo profesor/admin puede cambiar estado"
+    },
+    {
+      "case": "Profesor acepta tutoria propia",
+      "expected": "200 con Calendar simulado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: aceptada"
+    },
     {
       "case": "GET sin token",
       "expected": "401",
@@ -35,23 +64,23 @@
     {
       "case": "A consulta tutoria de B",
       "expected": "403/404 sin datos ajenos",
-      "http_status": 200,
-      "passed": false,
-      "observation": "recurso ajeno devuelto: True"
+      "http_status": 403,
+      "passed": true,
+      "observation": "recurso ajeno devuelto: False"
     },
     {
       "case": "A modifica tutoria de B",
       "expected": "403/404 y mensaje intacto",
-      "http_status": 200,
-      "passed": false,
-      "observation": "cambio ajeno confirmado en BD: True"
+      "http_status": 403,
+      "passed": true,
+      "observation": "cambio ajeno confirmado en BD: False"
     },
     {
       "case": "A borra tutoria de B",
       "expected": "403/404 y fila conservada",
-      "http_status": 200,
-      "passed": false,
-      "observation": "borrado ajeno confirmado en BD: True"
+      "http_status": 403,
+      "passed": true,
+      "observation": "borrado ajeno confirmado en BD: False"
     },
     {
       "case": "B consulta su tutoria",

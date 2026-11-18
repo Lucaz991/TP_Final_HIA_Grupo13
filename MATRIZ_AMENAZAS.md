@@ -19,7 +19,7 @@
 
 | ID | Amenaza | Evidencia actual | Impacto / prioridad | Control faltante | Estado |
 |---|---|---|---|---|---|
-| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Alumno A consultó, modificó y borró recursos descartables de B en H24 | Alto; corregir antes de publicar esta versión | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Abierto; sin corrección aplicada |
+| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Falla inicial confirmada y retest 13/13 aprobado en H24 | Alto; integración pendiente | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Corregido en laboratorio; despliegue pendiente |
 
 El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
 ninguno de esos controles evitó el acceso individual a recursos ajenos.

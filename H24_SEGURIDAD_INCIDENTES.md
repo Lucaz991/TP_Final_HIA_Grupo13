@@ -92,8 +92,11 @@ debe documentarse por separado y con su alcance.
 tres fallas (lectura, modificación y borrado por otro alumno). Se creó
 **H24-AUTH-01**, severidad alta, abierto; ver el
 [informe actual y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026).
-Se limpiaron los recursos descartables. La revisión completa de autorización
-continúa pendiente: faltan corrección, retest y otros endpoints/roles.
+Se limpiaron los recursos descartables. La corrección fue aplicada en la rama
+`fix/PT-33-autorizacion-tutorias` y el retest ampliado pasó **13/13** casos,
+incluyendo creación indebida, estado por profesor y acceso ajeno. Queda integrar
+y verificar tras despliegue; la revisión completa de otros endpoints/roles sigue
+pendiente.
 
 ### 4. Docker, infraestructura y CI/CD
 

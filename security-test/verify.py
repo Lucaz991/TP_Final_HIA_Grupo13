@@ -164,7 +164,7 @@ const assert = require('node:assert/strict');
 
 
 def authorization():
-    """Prueba acotada de propiedad; crea y elimina solo cuatro recursos marcados."""
+    """Prueba acotada de propiedad; crea y elimina solo recursos marcados."""
     tag = "H24-AUTH-" + uuid.uuid4().hex
     results = []
     ids = []
@@ -205,7 +205,7 @@ const ids = JSON.parse(rawIds);
     const where = {id:{[Op.in]:ids}, mensaje:{[Op.like]:tag+'%'}};
     if (action === 'cleanup') await Tutoria.destroy({where});
     data = await Tutoria.findAll({
-      where:{id:{[Op.in]:ids}}, attributes:['id','mensaje'], raw:true
+      where:{id:{[Op.in]:ids}}, attributes:['id','mensaje','estado'], raw:true
     });
   }
   console.log('H24_RESULT='+JSON.stringify(data));
@@ -227,29 +227,78 @@ const ids = JSON.parse(rawIds);
         line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
         if line and not line.startswith("#")
     )["SECURITY_ACCOUNT_PASSWORD"]
-    tokens = {}
-    for account in ["alumno.a", "alumno.b"]:
+    users = {}
+    for account in ["alumno.a", "alumno.b", "profesor.a"]:
         status, _, body = request("/api/autenticacion/login", {
             "email": account + "@h24.test", "password": secret
         })
         assert status == 200, "Login limitado; esperar 15 min o reiniciar solo backend H24"
         login = json.loads(body)
         assert login.get("status") == 1
-        tokens[account] = login["token"]
+        users[account] = {"id": login["id"], "token": login["token"]}
     try:
         ids = fixtures("create")
-        read_id, edit_id, delete_id, owner_id = ids
+        read_id, edit_id, delete_id, owner_id = ids[:4]
+        status, _, body = request("/api/categoria/")
+        categoria_id = json.loads(body)["data"][0]["id"]
+
+        status, _, body = request("/api/tutoria/", {
+            "alumnoId": users["alumno.b"]["id"],
+            "profesorId": users["profesor.a"]["id"],
+            "categoriaId": categoria_id,
+            "fechaHora": "2026-11-23T15:00:00Z",
+            "modalidad": "virtual",
+            "precioAcordado": 100,
+            "mensaje": tag + "-impersonated"
+        }, users["alumno.a"]["token"])
+        created_id = (json.loads(body).get("data") or {}).get("id")
+        if created_id: ids.append(created_id)
+        record("A crea tutoria a nombre de B", "403 sin crear recurso", status,
+               status == 403 and not created_id,
+               f"alta indebida creada: {bool(created_id)}")
+
+        status, _, body = request("/api/tutoria/", {
+            "alumnoId": users["alumno.a"]["id"],
+            "profesorId": users["profesor.a"]["id"],
+            "categoriaId": categoria_id,
+            "fechaHora": "2026-11-23T15:00:00Z",
+            "modalidad": "virtual",
+            "precioAcordado": 100,
+            "mensaje": tag + "-owner-create",
+            "estado": "aceptada"
+        }, users["alumno.a"]["token"])
+        own_id = (json.loads(body).get("data") or {}).get("id")
+        if own_id: ids.append(own_id)
+        own_row = next((row for row in fixtures("read") if row["id"] == own_id), {})
+        record("A crea su propia tutoria", "200 pendiente, ignora estado enviado", status,
+               status == 200 and own_row.get("estado") == "pendiente",
+               f"estado persistido: {own_row.get('estado')}")
+
+        status, _, _ = request(f"/api/tutoria/{own_id}", {
+            "estado": "aceptada"
+        }, users["alumno.a"]["token"], "PUT")
+        record("Alumno acepta su tutoria", "403 sin cambio de estado", status,
+               status == 403, "solo profesor/admin puede cambiar estado")
+
+        status, _, _ = request(f"/api/tutoria/{own_id}", {
+            "estado": "aceptada"
+        }, users["profesor.a"]["token"], "PUT")
+        own_row = next((row for row in fixtures("read") if row["id"] == own_id), {})
+        record("Profesor acepta tutoria propia", "200 con Calendar simulado", status,
+               status == 200 and own_row.get("estado") == "aceptada",
+               f"estado persistido: {own_row.get('estado')}")
         for name, token in [("sin token", None), ("token invalido", "h24-invalid")]:
             status, _, _ = request(f"/api/tutoria/{read_id}", token=token)
             record("GET " + name, "401", status, status == 401, "control de autenticacion")
 
-        status, _, body = request("/api/tutoria/", token=tokens["alumno.a"])
+        status, _, body = request("/api/tutoria/", token=users["alumno.a"]["token"])
+        b_fixture_ids = set(ids[:4])
         visible = {row["id"] for row in json.loads(body).get("data", [])}
         record("Listado de A", "200 sin recursos de B", status,
-               status == 200 and not visible.intersection(ids),
-               "lista excluye fixtures de B" if not visible.intersection(ids) else "lista expone fixtures de B")
+               status == 200 and not visible.intersection(b_fixture_ids),
+               "lista excluye fixtures de B" if not visible.intersection(b_fixture_ids) else "lista expone fixtures de B")
 
-        status, _, body = request(f"/api/tutoria/{read_id}", token=tokens["alumno.a"])
+        status, _, body = request(f"/api/tutoria/{read_id}", token=users["alumno.a"]["token"])
         data = json.loads(body).get("data") or {}
         exposed = data.get("id") == read_id
         record("A consulta tutoria de B", "403/404 sin datos ajenos", status,
@@ -258,7 +307,7 @@ const ids = JSON.parse(rawIds);
 
         status, _, _ = request(f"/api/tutoria/{edit_id}", {
             "mensaje": tag + "-modified-by-A"
-        }, tokens["alumno.a"], "PUT")
+        }, users["alumno.a"]["token"], "PUT")
         rows = {row["id"]: row["mensaje"] for row in fixtures("read")}
         changed = rows.get(edit_id) == tag + "-modified-by-A"
         record("A modifica tutoria de B", "403/404 y mensaje intacto", status,
@@ -266,25 +315,25 @@ const ids = JSON.parse(rawIds);
                f"cambio ajeno confirmado en BD: {changed}")
 
         status, _, _ = request(f"/api/tutoria/{delete_id}",
-                               token=tokens["alumno.a"], method="DELETE")
+                               token=users["alumno.a"]["token"], method="DELETE")
         remaining = {row["id"] for row in fixtures("read")}
         record("A borra tutoria de B", "403/404 y fila conservada", status,
                status in (403, 404) and delete_id in remaining,
                f"borrado ajeno confirmado en BD: {delete_id not in remaining}")
 
-        status, _, body = request(f"/api/tutoria/{owner_id}", token=tokens["alumno.b"])
+        status, _, body = request(f"/api/tutoria/{owner_id}", token=users["alumno.b"]["token"])
         record("B consulta su tutoria", "200 con recurso propio", status,
                status == 200 and (json.loads(body).get("data") or {}).get("id") == owner_id,
                "control positivo del propietario")
         status, _, _ = request(f"/api/tutoria/{owner_id}", {
             "mensaje": tag + "-modified-by-owner"
-        }, tokens["alumno.b"], "PUT")
+        }, users["alumno.b"]["token"], "PUT")
         rows = {row["id"]: row["mensaje"] for row in fixtures("read")}
         record("B modifica su tutoria", "200 y mensaje actualizado", status,
                status == 200 and rows.get(owner_id) == tag + "-modified-by-owner",
                "control positivo del propietario; no evalua transiciones de estado")
         status, _, _ = request(f"/api/tutoria/{owner_id}",
-                               token=tokens["alumno.b"], method="DELETE")
+                               token=users["alumno.b"]["token"], method="DELETE")
         remaining = {row["id"] for row in fixtures("read")}
         record("B borra su tutoria", "200 y fila eliminada", status,
                status == 200 and owner_id not in remaining, "control positivo del propietario")

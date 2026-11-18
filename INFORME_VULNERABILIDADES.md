@@ -41,8 +41,8 @@ Las siguientes precisiones prevalecen sobre las conclusiones históricas:
 
 ### H24-AUTH-01: acceso a tutorías de otro usuario (BOLA/IDOR)
 
-**Estado: abierto, confirmado en laboratorio; corrección pendiente.**
-**Severidad: alta. Prioridad: corregir antes de publicar esta versión.**
+**Estado: corregido en rama de fix y verificado en laboratorio; despliegue pendiente.**
+**Severidad: alta. Prioridad: integrar la corrección antes de publicar esta versión.**
 Un usuario autenticado puede consultar, modificar y eliminar una tutoría ajena
 cambiando el ID de la URL. Afecta confidencialidad, integridad y disponibilidad
 de los registros. No es una inyección SQL ni requiere evadir la firma del JWT.
@@ -103,10 +103,17 @@ la verificación previa; no ejecutarla repetidamente sin considerar el limitador
 | Verificación | Reconstruir solo backend H24 y repetir la misma prueba; agregar casos de profesor y campos restringidos al implementar el fix | Accesos ajenos rechazados, datos intactos, casos legítimos funcionales |
 | Despliegue y cierre | PR revisado, controles del pipeline y comprobación posterior al despliegue | Evidencia antes/después y estado actualizado; no cerrar solo por editar código |
 
-Estas medidas están **propuestas, no aplicadas**. No se detectó ni investigó una
-explotación real. El hallazgo no implica que haya ocurrido un incidente en
-producción. No se evaluaron aún otros endpoints, alta de tutorías, transiciones
-de estado, SQLi, XSS, proveedores externos o n8n.
+**Corrección y retest 18/11/2026:** se reforzó `tutoria.controller.js` para exigir
+participante/admin en GET/PUT/DELETE individual, impedir crear tutorías a nombre
+de otro alumno, restringir los cambios de estado al profesor/admin, bloquear la
+reasignación de participantes y evitar que el cliente envíe `enlaceMeet` o
+`googleEventId`. El retest `verify.py --authorization` pasó **13/13** casos:
+alta indebida 403, alta propia pendiente, alumno no acepta, profesor sí acepta,
+y GET/PUT/DELETE ajenos 403. Evidencia posterior:
+`security-test/authorization-results.json` (imagen `sha256:d02bb705b384...`).
+Los fixtures se limpiaron. Queda integrar el fix, comprobarlo tras el despliegue
+y revisar otros endpoints/campos; no hubo prueba ni evidencia de explotación en
+producción.
 
 ## Informe original del 09/11/2026
 

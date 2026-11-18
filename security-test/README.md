@@ -150,7 +150,7 @@ Primero ejecuta la verificación del laboratorio. Luego usa login local de los
 alumnos A/B y crea cuatro tutorías descartables de B. Prueba acceso individual,
 modificación y borrado por A y por el propietario; confirma los cambios mediante
 lecturas de la base y limpia solo las tutorías creadas por esta ejecución.
-Los datos del seed no se borran. Consume cuatro intentos de login en total.
+Los datos del seed no se borran. Consume cinco intentos de login en total.
 
 Guarda `authorization-results.json` sin passwords ni JWT. Devuelve código 2 si
 existen controles fallidos; código 0 si todos pasan. Una excepción indica que la
@@ -158,10 +158,9 @@ prueba no pudo completarse y requiere revisar el mensaje. El JSON se reemplaza
 al repetir la prueba: conservar el resultado anterior en Git antes del retest.
 No mezclar el resultado de un laboratorio modificado manualmente con el baseline.
 
-Resultado inicial: **H24-AUTH-01**, acceso ajeno confirmado en GET/PUT/DELETE,
-pendiente de corrección. Ver `INFORME_VULNERABILIDADES.md`. Los controles positivos
-del propietario describen esta versión; las reglas detalladas por rol y estado
-deben definirse al corregir.
+Resultado: **H24-AUTH-01** quedó corregido y el retest pasó 13/13 en el
+laboratorio; la integración/despliegue sigue pendiente. Ver
+`INFORME_VULNERABILIDADES.md`.
 
 Registrar: identificador, commit/imagen, endpoint, cuenta ficticia y rol, pasos,
 resultado esperado/observado, evidencia sin tokens, impacto, responsable y
