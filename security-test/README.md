@@ -174,6 +174,26 @@ Resultado: **H24-AUTH-01**, **H24-AUTH-02**, **H24-AUTH-03**,
 retest pasó **62/62**; la integración/despliegue sigue pendiente. Ver
 `INFORME_VULNERABILIDADES.md`.
 
+Prueba controlada de SQLi de bajo impacto:
+
+```powershell
+python security-test/verify.py --sqli
+```
+
+Primero ejecuta la verificación del laboratorio. Luego prueba payloads de error,
+condición booleana, `UNION` y `pg_sleep` en IDs de ruta, filtros de usuario,
+paginación, búsquedas admin y login. No usa `DROP`, `UPDATE`, `DELETE` ni
+extracción de datos; compara recuentos de tablas antes/después y exige que las
+respuestas sean rápidas, no devuelvan objetos ajenos ni expongan errores SQL o
+secretos. Consume tres intentos de login (dos de la verificación y uno para la
+prueba de email); combinado con `--authorization` llega al máximo de cinco.
+
+Resultado: **37/37 casos aprobaron** en `security-test/sqli-results.json`.
+Los IDs inválidos devolvieron errores controlados sin ejecutar la condición; el
+login no emitió token. Como observación de robustez, algunos IDs malformados
+devuelven 500 genérico y un login inexistente devuelve HTTP 200 con
+`status:0`: no hubo bypass, pero conviene normalizar respuestas en otra tarea.
+
 Registrar: identificador, commit/imagen, endpoint, cuenta ficticia y rol, pasos,
 resultado esperado/observado, evidencia sin tokens, impacto, responsable y
 correccion. Repetir la prueba tras el fix. Los fallos de la CSP/producto real se

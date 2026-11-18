@@ -193,6 +193,38 @@ por eso se verificó siempre la base después de una mutación.
 Retest: accesos ajenos devolvieron **403**, controles de propietario/profesor
 devolvieron **200**, y los fixtures quedaron eliminados.
 
+### H24-SQLI-01: prueba controlada de inyección SQL
+
+**Estado: ejecutada en laboratorio; no se confirmó inyección en el alcance probado.**
+**Severidad si se reprodujera: alta.** La revisión de código no encontró
+`sequelize.query` ni SQL manual concatenado en los controladores. Los filtros más
+sensibles usan `Sequelize.literal` con valores convertidos a número o listas de
+columnas fijas; el resto pasa por el ORM. Esto reduce la superficie, pero no
+exime de repetir la prueba al agregar endpoints o consultas dinámicas.
+
+Comando:
+
+```powershell
+python security-test/verify.py --sqli
+```
+
+Alcance: payloads de error, condición booleana, `UNION` y `pg_sleep` en IDs de
+categoría, profesor, tutoría, solicitud, horario y calificación; filtros de
+usuario, paginación, búsquedas administrativas y email de login. No se usaron
+`DROP`, `UPDATE`, `DELETE` ni extracción de datos. Se compararon recuentos de
+tablas antes/después y se midió que ninguna respuesta ejecutara la espera.
+
+Resultado: **37/37 casos aprobaron** sobre el commit `967f13d9` y la imagen
+`sha256:7139bcc87ea7...`. Evidencia: `security-test/sqli-results.json`.
+Las búsquedas admin trataron el payload como texto literal y devolvieron cero
+coincidencias; el login no emitió token.
+
+**Observaciones no críticas de robustez:** IDs malformados en rutas devuelven
+HTTP 500 genérico en lugar de un 400 uniforme, y un email inexistente puede
+devolver HTTP 200 con `status:0`. No se observó bypass ni ejecución SQL, pero
+conviene normalizar esas respuestas para facilitar monitoreo y evitar falsos
+positivos en futuras pruebas.
+
 ### Retest integrado 18/11/2026
 
 `python security-test/verify.py --authorization` pasó **62/62** casos sobre el
@@ -200,7 +232,8 @@ commit `dd76a29e` y la imagen `sha256:7139bcc87ea7...`: tutorías, perfil,
 horarios actuales, ruta legacy, categorías, solicitudes, respuestas y
 calificaciones. La evidencia sin credenciales está en
 `security-test/authorization-results.json`. Pendientes: muestra representativa
-de `/api/admin`, Mercado Pago, chat, auditoría, SQLi y validación tras despliegue.
+de `/api/admin`, Mercado Pago, chat, auditoría, normalización de errores de
+validación y validación tras despliegue.
 
 ## Informe original del 09/11/2026
 

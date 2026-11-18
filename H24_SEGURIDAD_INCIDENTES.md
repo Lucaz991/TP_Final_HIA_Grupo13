@@ -83,7 +83,7 @@ debe documentarse por separado y con su alcance.
 
 - [ ] Revisar amenazas y vulnerabilidades anteriores con herramientas actuales.
 - [ ] Verificar autenticación y autorización por rol y por propietario del recurso.
-- [ ] Probar SQLi de bajo impacto sobre endpoints seleccionados del entorno aislado.
+- [x] Probar SQLi de bajo impacto sobre endpoints seleccionados del entorno aislado.
 - [ ] Verificar validación de entradas, errores, headers y límites de solicitudes.
 - [ ] Revisar secretos sin incorporar valores, tokens o contraseñas a los reportes.
 
@@ -94,9 +94,12 @@ debe documentarse por separado y con su alcance.
 (funciones de categorías sin autenticación ni rol) y **H24-AUTH-04**
 (solicitudes, respuestas y calificaciones ajenas). El retest integrado pasó
 **62/62** casos, con accesos indebidos rechazados y controles positivos
-conservados. Se limpiaron los recursos descartables. Queda integrar la rama
+conservados. Se limpiaron los recursos descartables. Además, la matriz SQLi
+controlada pasó **37/37** casos sobre rutas, filtros, búsquedas admin y login,
+sin ejecución inyectada ni cambios en las tablas. Queda integrar la rama
 `fix/PT-33-autorizacion-tutorias` y verificar tras despliegue; siguen pendientes
-la muestra de `/api/admin`, Mercado Pago, chat, auditoría y las pruebas SQLi.
+la muestra de `/api/admin`, Mercado Pago, chat, auditoría y revisión de errores
+de validación observados durante SQLi.
 
 ### 4. Docker, infraestructura y CI/CD
 

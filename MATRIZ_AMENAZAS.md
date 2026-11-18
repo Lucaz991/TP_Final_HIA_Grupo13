@@ -24,6 +24,7 @@
 | AM-18 / H24-AUTH-03 | Alta/desactivación de horarios de otro profesor | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Validar `profesorId` con JWT en rutas actual y legacy | Corregido en laboratorio; despliegue pendiente |
 | AM-19 / H24-BFLA-01 | Funciones de categorías sin autenticación ni rol | Acciones sin token confirmadas y retest 401/403/200 aprobado | Alto; integración pendiente | `verifyToken`, `verifyAdmin` y propiedad del profesor en asociaciones | Corregido en laboratorio; despliegue pendiente |
 | AM-20 / H24-AUTH-04 | Solicitudes, respuestas y calificaciones ajenas por ID | Operaciones cruzadas confirmadas y retest 403/200 aprobado | Alto; integración pendiente | Validar propietario, autor, rol profesor y participación en la solicitud/tutoría | Corregido en laboratorio; despliegue pendiente |
+| AM-01 / H24-SQLI-01 | Inyección SQL en rutas, filtros, búsquedas admin y login | 37/37 probes controlados sin ejecución ni cambios en tablas | Residual: alcance limitado a endpoints y técnicas seleccionadas | Mantener parametrización y validación; repetir si cambian consultas o se agregan endpoints | Probado en laboratorio; no hallada en el alcance ejecutado |
 
 El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
 ninguno de esos controles evitó el acceso individual a recursos ajenos.
