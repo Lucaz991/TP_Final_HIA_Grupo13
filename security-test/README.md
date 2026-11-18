@@ -154,12 +154,12 @@ python security-test/verify.py --authorization
 ```
 
 Primero ejecuta la verificación del laboratorio. Luego usa login local de los
-alumnos A/B y profesor A. Crea tutorías descartables de B y un horario
-descartable de profesor B. Prueba acceso individual, modificación, borrado,
-creación de horarios y la ruta legacy `/api/usuario/horario`; confirma los
-cambios mediante lecturas de la base y limpia solo los recursos creados por esta
-ejecución. Los datos del seed no se borran. Consume cinco intentos de login en
-total.
+alumnos A/B, profesor A y admin. Crea tutorías descartables de B, un horario
+descartable de profesor B y categorías descartables. Prueba acceso individual,
+modificación, borrado, horarios, rutas legacy y funciones administrativas de
+categorías; confirma los cambios mediante lecturas de la base y limpia solo los
+recursos creados por esta ejecución. Los datos del seed no se borran. Consume
+cuatro intentos de login en total.
 
 Guarda `authorization-results.json` sin passwords ni JWT. Devuelve código 2 si
 existen controles fallidos; código 0 si todos pasan. Una excepción indica que la
@@ -167,9 +167,9 @@ prueba no pudo completarse y requiere revisar el mensaje. El JSON se reemplaza
 al repetir la prueba: conservar el resultado anterior en Git antes del retest.
 No mezclar el resultado de un laboratorio modificado manualmente con el baseline.
 
-Resultado: **H24-AUTH-01**, **H24-AUTH-02** y **H24-AUTH-03** quedaron
-corregidos en laboratorio y el retest pasó **21/21**; la integración/despliegue
-sigue pendiente. Ver `INFORME_VULNERABILIDADES.md`.
+Resultado: **H24-AUTH-01**, **H24-AUTH-02**, **H24-AUTH-03** y
+**H24-BFLA-01** quedaron corregidos en laboratorio y el retest pasó **34/34**;
+la integración/despliegue sigue pendiente. Ver `INFORME_VULNERABILIDADES.md`.
 
 Registrar: identificador, commit/imagen, endpoint, cuenta ficticia y rol, pasos,
 resultado esperado/observado, evidencia sin tokens, impacto, responsable y

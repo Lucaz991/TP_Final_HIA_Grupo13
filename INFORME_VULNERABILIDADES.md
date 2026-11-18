@@ -87,7 +87,7 @@ El comando valida primero el aislamiento, obtiene tokens por login local, crea
 recursos descartables de B, ejecuta la matriz y limpia solo esos recursos.
 Termina con código **2** cuando encuentra incumplimientos y deja el JSON anterior.
 Las tres fallas son hallazgos esperados al reproducir esta versión, no errores
-del arranque del laboratorio. La prueba consume cinco intentos de login contando
+del arranque del laboratorio. La prueba consume cuatro intentos de login contando
 la verificación previa; no ejecutarla repetidamente sin considerar el limitador.
 
 ### Plan de acción para H24-AUTH-01
@@ -145,14 +145,29 @@ profesor objetivo debe existir y el borrado/desactivación comprueba
 guarda `modalidad`/`estado`. Retest: alta ajena **403**, desactivación ajena
 **403** con estado `activo`, alta y desactivación propias **200**.
 
+### H24-BFLA-01: funciones de categorías sin autenticación ni rol
+
+**Estado: corregido en rama de fix y verificado en laboratorio; despliegue pendiente.**
+**Severidad: crítica.** `backend/src/routes/categoria.route.js` no aplicaba
+`verifyToken` a las operaciones de escritura. En el laboratorio, una request sin
+sesión pudo modificar y borrar una categoría y asociar/desasociar un profesor con
+HTTP **200**. Además, el controlador aceptaba `profesorId` del body y admitía
+cualquier usuario como profesor.
+
+**Corrección verificada:** las lecturas públicas se conservaron; `POST`,
+`PUT` y `DELETE` de categorías exigen admin; la asociación profesor-categoría
+exige token y solo permite al profesor propietario o admin. Se validó que el
+objetivo tenga rol `profesor` y se corrigió el alta para guardar `nivel`.
+Retest: sin token **401**, alumno **403**, profesor propietario **200** y admin
+**200**.
+
 ### Retest integrado 18/11/2026
 
-`python security-test/verify.py --authorization` pasó **21/21** casos sobre la
-imagen `sha256:e06cd6aaf6d7...`: tutorías, perfil, horarios actuales y ruta
-legacy. La evidencia sin credenciales está en
+`python security-test/verify.py --authorization` pasó **34/34** casos sobre la
+imagen `sha256:57d038ad5ac6...`: tutorías, perfil, horarios actuales, ruta
+legacy y funciones de categorías. La evidencia sin credenciales está en
 `security-test/authorization-results.json`. Pendientes: solicitudes, respuestas,
-calificaciones, revisión completa de endpoints administrativos y validación tras
-despliegue.
+calificaciones y validación tras despliegue.
 
 ## Informe original del 09/11/2026
 

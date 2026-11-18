@@ -87,15 +87,15 @@ debe documentarse por separado y con su alcance.
 - [ ] Verificar validación de entradas, errores, headers y límites de solicitudes.
 - [ ] Revisar secretos sin incorporar valores, tokens o contraseñas a los reportes.
 
-**Avance 18/11/2026:** ejecutada la prueba acotada de propiedad con
+**Avance 18/11/2026:** ejecutada la prueba acotada de autorización con
 `python security-test/verify.py --authorization`. Se confirmaron y corrigieron
-**H24-AUTH-01** (tutorías ajenas), **H24-AUTH-02** (edición de perfil ajeno) y
-**H24-AUTH-03** (alta/desactivación de horarios ajenos, incluida la ruta legacy).
-El retest integrado pasó **21/21** casos, con acceso ajeno rechazado y controles
-positivos del propietario conservados. Se limpiaron los recursos descartables.
-Queda integrar la rama `fix/PT-33-autorizacion-tutorias` y verificar tras
-despliegue; la revisión de solicitudes, respuestas, calificaciones y otros roles
-sigue pendiente.
+**H24-AUTH-01** (tutorías ajenas), **H24-AUTH-02** (edición de perfil ajeno),
+**H24-AUTH-03** (horarios ajenos, incluida la ruta legacy) y **H24-BFLA-01**
+(funciones de categorías sin autenticación ni rol). El retest integrado pasó
+**34/34** casos, con accesos indebidos rechazados y controles positivos
+conservados. Se limpiaron los recursos descartables. Queda integrar la rama
+`fix/PT-33-autorizacion-tutorias` y verificar tras despliegue; la revisión de
+solicitudes, respuestas y calificaciones sigue pendiente.
 
 ### 4. Docker, infraestructura y CI/CD
 

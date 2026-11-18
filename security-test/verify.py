@@ -131,6 +131,7 @@ def main():
         if line and not line.startswith("#")
     )["SECURITY_ACCOUNT_PASSWORD"]
     assert request("/api/admin/summary")[0] == 401
+    verified_users = {}
     for name, expected in [("alumno.a", 403), ("admin", 200)]:
         status, _, body = request("/api/autenticacion/login", {
             "email": f"{name}@h24.test", "password": secret
@@ -138,6 +139,7 @@ def main():
         assert status == 200, "Login limitado: esperar 15 min o reiniciar solo backend de H24"
         login = json.loads(body)
         assert login.get("status") == 1
+        verified_users[name] = {"id": login["id"], "token": login["token"]}
         assert request("/api/admin/summary", token=login["token"])[0] == expected
         if name == "alumno.a":
             status, _, body = request("/api/tutoria/", token=login["token"])
@@ -161,14 +163,16 @@ const assert = require('node:assert/strict');
 """)
     print("OK Calendar simulado y adaptadores sin llamadas externas")
     print("Laboratorio verificado. No se ejecutaron SQLi, ZAP ni pruebas completas de H24.")
+    return verified_users
 
 
-def authorization():
+def authorization(verified_users):
     """Prueba acotada de propiedad; crea y elimina solo recursos marcados."""
     tag = "H24-AUTH-" + uuid.uuid4().hex
     results = []
     ids = []
     horario_ids = []
+    categoria_ids = []
 
     def fixtures(action):
         script = """
@@ -254,6 +258,40 @@ const id = Number(rawId);
         return json.loads(next(line.removeprefix("H24_RESULT=")
                                for line in output.splitlines() if line.startswith("H24_RESULT=")))
 
+    def categoria_fixture(action, categoria_id=0):
+        script = """
+require('./security-test/guard.cjs')();
+const assert = require('node:assert/strict');
+const db = require('./config/database');
+const Categoria = require('./src/models/categoria.model');
+const ProfesorCategoria = require('./src/models/profesorCategoria.model');
+const [action, rawId, tag] = process.argv.slice(1);
+const id = Number(rawId);
+(async () => {
+  const [identity] = await db.query('SELECT current_database() AS name');
+  assert.equal(identity[0].name, 'h24_security_test');
+  let data = null;
+  if (action === 'create') {
+    const row = await Categoria.create({
+      nombre:tag + '-categoria', nivel:'primario', descripcion:tag
+    });
+    data = {id:row.id, nombre:row.nombre};
+  } else if (action === 'read') {
+    data = await Categoria.findByPk(id, {
+      attributes:['id','nombre','nivel'], raw:true
+    });
+  } else {
+    await ProfesorCategoria.destroy({where:{categoriaId:id}});
+    data = await Categoria.destroy({where:{id}});
+  }
+  console.log('H24_RESULT='+JSON.stringify(data));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, action, str(categoria_id), tag)
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
     def user_field(email, field):
         script = """
 require('./security-test/guard.cjs')();
@@ -281,8 +319,8 @@ const [email, field] = process.argv.slice(1);
         line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
         if line and not line.startswith("#")
     )["SECURITY_ACCOUNT_PASSWORD"]
-    users = {}
-    for account in ["alumno.a", "alumno.b", "profesor.a"]:
+    users = {name: verified_users[name] for name in ["alumno.a", "admin"]}
+    for account in ["alumno.b", "profesor.a"]:
         status, _, body = request("/api/autenticacion/login", {
             "email": account + "@h24.test", "password": secret
         })
@@ -458,11 +496,91 @@ const [email, field] = process.argv.slice(1);
         record("A borra horario ajeno por ruta legacy", "403 y horario activo", status,
                status == 403 and row.get("estado") == "activo",
                f"estado persistido: {row.get('estado')}")
+
+        categoria = categoria_fixture("create")
+        categoria_ids.append(categoria["id"])
+        status, _, _ = request(f"/api/categoria/{categoria['id']}", {
+            "nombre": tag + "-sin-token"
+        }, method="PUT")
+        record("Sin token modifica categoria", "401", status,
+               status == 401, "control de autenticacion")
+        status, _, _ = request(f"/api/categoria/{categoria['id']}", {
+            "nombre": tag + "-alumno"
+        }, users["alumno.a"]["token"], "PUT")
+        record("Alumno modifica categoria", "403", status,
+               status == 403, "control de rol administrativo")
+        status, _, _ = request(f"/api/categoria/{categoria['id']}", {
+            "nombre": tag + "-actualizada"
+        }, users["admin"]["token"], "PUT")
+        row = categoria_fixture("read", categoria["id"])
+        record("Admin modifica categoria", "200 y nombre persistido", status,
+               status == 200 and row.get("nombre") == tag + "-actualizada",
+               "control positivo administrativo")
+
+        status, _, _ = request("/api/categoria", {
+            "nombre": tag + "-sin-token", "nivel": "primario",
+            "descripcion": "sin token"
+        }, method="POST")
+        record("Sin token crea categoria", "401", status,
+               status == 401, "control de autenticacion")
+        status, _, _ = request("/api/categoria", {
+            "nombre": tag + "-alumno", "nivel": "primario",
+            "descripcion": "alumno"
+        }, users["alumno.a"]["token"])
+        record("Alumno crea categoria", "403", status,
+               status == 403, "control de rol administrativo")
+        status, _, body = request("/api/categoria", {
+            "nombre": tag + "-creada", "nivel": "primario",
+            "descripcion": "admin"
+        }, users["admin"]["token"])
+        categoria_creada = (json.loads(body).get("data") or {}).get("id")
+        if categoria_creada:
+            categoria_ids.append(categoria_creada)
+        record("Admin crea categoria", "200 y recurso propio", status,
+               status == 200 and bool(categoria_creada),
+               "control positivo administrativo")
+
+        status, _, _ = request("/api/categoria/profesor", {
+            "profesorId": users["profesor.a"]["id"], "categoriaId": categoria["id"]
+        }, method="POST")
+        record("Sin token asocia profesor-categoria", "401", status,
+               status == 401, "control de autenticacion")
+        status, _, _ = request("/api/categoria/profesor", {
+            "profesorId": users["profesor.a"]["id"], "categoriaId": categoria["id"]
+        }, users["alumno.a"]["token"])
+        record("Alumno asocia profesor-categoria", "403", status,
+               status == 403, "control de propietario")
+        status, _, _ = request("/api/categoria/profesor", {
+            "profesorId": users["profesor.a"]["id"], "categoriaId": categoria["id"]
+        }, users["profesor.a"]["token"])
+        record("Profesor asocia su categoria", "200", status,
+               status == 200, "control positivo del propietario")
+        status, _, _ = request("/api/categoria/profesor", {
+            "profesorId": users["profesor.a"]["id"], "categoriaId": categoria["id"]
+        }, users["profesor.a"]["token"], "DELETE")
+        record("Profesor desasocia su categoria", "200", status,
+               status == 200, "control positivo del propietario")
+
+        status, _, _ = request(f"/api/categoria/{categoria['id']}", method="DELETE")
+        record("Sin token borra categoria", "401", status,
+               status == 401, "control de autenticacion")
+        status, _, _ = request(f"/api/categoria/{categoria['id']}",
+                               token=users["alumno.a"]["token"], method="DELETE")
+        record("Alumno borra categoria", "403", status,
+               status == 403, "control de rol administrativo")
+        status, _, _ = request(f"/api/categoria/{categoria['id']}",
+                               token=users["admin"]["token"], method="DELETE")
+        row = categoria_fixture("read", categoria["id"])
+        record("Admin borra categoria", "200 y recurso ausente", status,
+               status == 200 and row is None,
+               "control positivo administrativo")
     finally:
         if ids:
             assert fixtures("cleanup") == [], "Revisar limpieza de los fixtures marcados"
         for horario_id in horario_ids:
             horario_fixture("cleanup", horario_id)
+        for categoria_id in categoria_ids:
+            categoria_fixture("cleanup", categoria_id)
 
     backend_id = run(*COMPOSE, "ps", "-q", "backend")
     image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
@@ -470,7 +588,9 @@ const [email, field] = process.argv.slice(1);
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "source_commit": run("git", "rev-parse", "HEAD"),
         "backend_image": image_id, "target": BASE,
-        "fixture_ids": {"tutorias": ids, "horarios": horario_ids},
+        "fixture_ids": {
+            "tutorias": ids, "horarios": horario_ids, "categorias": categoria_ids
+        },
         "fixtures_cleaned": True, "results": results,
     }
     path = ROOT / "security-test" / "authorization-results.json"
@@ -482,8 +602,8 @@ const [email, field] = process.argv.slice(1);
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authorization", action="store_true",
-                        help="Tras verificar aislamiento, probar propiedad de tutorias descartables")
+                        help="Tras verificar aislamiento, probar propiedad/rol sobre recursos descartables")
     args = parser.parse_args()
-    main()
-    if args.authorization and not authorization():
+    verified_users = main()
+    if args.authorization and not authorization(verified_users):
         raise SystemExit(2)

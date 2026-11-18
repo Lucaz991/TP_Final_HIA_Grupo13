@@ -1,19 +1,23 @@
 {
-  "timestamp_utc": "2026-11-18T21:18:09.337727+00:00",
-  "source_commit": "8e4b5844a784df9bc6bd00b12d92d1b5c06414c1",
-  "backend_image": "sha256:e06cd6aaf6d7125dcc618244a538c745316523ad24b5f0461a4052d9109ebe02",
+  "timestamp_utc": "2026-11-18T22:04:15.068336+00:00",
+  "source_commit": "a4576012bd2e772235f9401e1f3d5638c149c82e",
+  "backend_image": "sha256:57d038ad5ac6afd4ffbd490be30a46367ee32bc3f232a036ccbe5833b834075f",
   "target": "http://127.0.0.1:9081",
   "fixture_ids": {
     "tutorias": [
-      23,
-      24,
-      25,
-      26,
-      27
+      28,
+      29,
+      30,
+      31,
+      32
     ],
     "horarios": [
-      13,
-      14
+      15,
+      16
+    ],
+    "categorias": [
+      3,
+      4
     ]
   },
   "fixtures_cleaned": true,
@@ -164,6 +168,97 @@
       "http_status": 403,
       "passed": true,
       "observation": "estado persistido: activo"
+    },
+    {
+      "case": "Sin token modifica categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno modifica categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin modifica categoria",
+      "expected": "200 y nombre persistido",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Sin token crea categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno crea categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin crea categoria",
+      "expected": "200 y recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Sin token asocia profesor-categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno asocia profesor-categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de propietario"
+    },
+    {
+      "case": "Profesor asocia su categoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Profesor desasocia su categoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Sin token borra categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno borra categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin borra categoria",
+      "expected": "200 y recurso ausente",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
     }
   ]
 }
