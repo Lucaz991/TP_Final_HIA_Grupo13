@@ -35,7 +35,14 @@ La clave compartida **solo para estas cuentas ficticias** esta en
 `SECURITY_ACCOUNT_PASSWORD` de `.env.security-test`. El inicializador genera claves
 aleatorias diferentes para PostgreSQL, el usuario de aplicacion y JWT. El archivo
 esta ignorado por Git; no copiar el `.env` de produccion ni publicar sus valores.
-Reejecutar `init.ps1` conserva las claves existentes.
+Reejecutar `init.ps1` conserva las claves existentes. La clave de cuentas debe
+cumplir la validación del formulario (8–20 caracteres, mayúscula, minúscula,
+número y símbolo). Si se cambia `SECURITY_ACCOUNT_PASSWORD` en una instalación ya
+cargada, actualizar los hashes sin borrar datos con:
+
+```powershell
+docker compose --env-file .env.security-test -p hia-security-test -f compose.security-test.yaml run --rm seed node security-test/set-account-password.cjs
+```
 
 Se cargan 5 usuarios, 1 categoria, 2 precios, 2 asignaciones, 2 horarios,
 4 tutorias (dos por alumno), 2 calificaciones, 2 solicitudes y 2 respuestas.
