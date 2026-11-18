@@ -1,0 +1,17 @@
+name: Continuous Deployment (Produccion)
+
+on:
+  push:
+    branches: [ "develop" ]
+
+jobs:
+  despliegue-automatico:
+    name: Actualizar Servidor en Vivo
+    runs-on: self-hosted
+    
+    steps:
+      - name: Actualizar y Desplegar
+        run: |
+          cd "C:\Users\lucas\OneDrive\Desktop\APU2026 LUCAS\HIA2026\TP_Final_HIA_Grupo13"
+          git pull origin develop
+          docker compose up -d --build
