@@ -161,13 +161,46 @@ objetivo tenga rol `profesor` y se corrigió el alta para guardar `nivel`.
 Retest: sin token **401**, alumno **403**, profesor propietario **200** y admin
 **200**.
 
+### H24-AUTH-04: gestión de solicitudes, respuestas y calificaciones ajenas
+
+**Estado: corregido en rama de fix y verificado en laboratorio; despliegue pendiente.**
+**Severidad: alta.** Los controladores confiaban en `usuarioId`, `solicitudId` y
+`tutoriaId` enviados por el cliente sin resolver primero la propiedad del objeto.
+La falla combina BOLA/IDOR y BFLA según la función invocada.
+
+En el baseline del laboratorio, `alumno.a` obtuvo HTTP **200** al consultar una
+solicitud de `alumno.b`, crear una solicitud a su nombre, editarla, cerrarla y
+borrarla; también pudo consultar respuestas, editar/aceptar una respuesta y crear
+o consultar una calificación de una tutoría ajena. Un profesor pudo crear una
+respuesta con `idUsuario` de otro profesor. `DELETE /api/respuesta/:id` devolvió
+**500**, pero la fila quedó eliminada por una falla posterior del controlador;
+por eso se verificó siempre la base después de una mutación.
+
+**Corrección verificada:**
+
+- Solicitudes: el listado se filtra por propietario; los profesores ven
+  solicitudes abiertas; admin conserva acceso. Crear usa el usuario autenticado
+  por defecto y rechaza otro `usuarioId`; consultar, editar, cerrar y borrar son
+  del propietario o admin; recursos ausentes devuelven 404.
+- Respuestas: consultar requiere permiso sobre la solicitud asociada; crear es
+  solo profesor/admin y con identidad propia salvo admin; editar y borrar son del
+  autor o admin; aceptar es del propietario de la solicitud o admin.
+- Calificaciones: solo el alumno participante puede calificar una tutoría
+  finalizada/completada; la consulta queda limitada a participantes o admin.
+- Se corrigieron referencias de usuario que producían errores después de una
+  operación sensible (`id_usuario` inexistente).
+
+Retest: accesos ajenos devolvieron **403**, controles de propietario/profesor
+devolvieron **200**, y los fixtures quedaron eliminados.
+
 ### Retest integrado 18/11/2026
 
-`python security-test/verify.py --authorization` pasó **34/34** casos sobre la
-imagen `sha256:57d038ad5ac6...`: tutorías, perfil, horarios actuales, ruta
-legacy y funciones de categorías. La evidencia sin credenciales está en
-`security-test/authorization-results.json`. Pendientes: solicitudes, respuestas,
-calificaciones y validación tras despliegue.
+`python security-test/verify.py --authorization` pasó **62/62** casos sobre el
+commit `dd76a29e` y la imagen `sha256:7139bcc87ea7...`: tutorías, perfil,
+horarios actuales, ruta legacy, categorías, solicitudes, respuestas y
+calificaciones. La evidencia sin credenciales está en
+`security-test/authorization-results.json`. Pendientes: muestra representativa
+de `/api/admin`, Mercado Pago, chat, auditoría, SQLi y validación tras despliegue.
 
 ## Informe original del 09/11/2026
 

@@ -1,24 +1,39 @@
 {
-  "timestamp_utc": "2026-11-18T22:04:15.068336+00:00",
-  "source_commit": "a4576012bd2e772235f9401e1f3d5638c149c82e",
-  "backend_image": "sha256:57d038ad5ac6afd4ffbd490be30a46367ee32bc3f232a036ccbe5833b834075f",
+  "timestamp_utc": "2026-11-18T22:53:56.190853+00:00",
+  "source_commit": "dd76a29ecbf726b6c1344693c94162feebcb33a8",
+  "backend_image": "sha256:7139bcc87ea79c0a1569992fbd1dde37aabb934234dd8453a634b232e0bd5a3b",
   "target": "http://127.0.0.1:9081",
   "fixture_ids": {
     "tutorias": [
-      28,
-      29,
-      30,
-      31,
-      32
+      47,
+      48,
+      49,
+      50,
+      51
     ],
     "horarios": [
-      15,
-      16
+      21,
+      22
     ],
     "categorias": [
-      3,
-      4
-    ]
+      9,
+      10
+    ],
+    "ayuda": {
+      "solicitudes": [
+        26,
+        27,
+        28,
+        29
+      ],
+      "respuestas": [
+        13,
+        14
+      ],
+      "tutorias": [
+        52
+      ]
+    }
   },
   "fixtures_cleaned": true,
   "results": [
@@ -259,6 +274,202 @@
       "http_status": 200,
       "passed": true,
       "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Listado solicitudes de A",
+      "expected": "200 sin solicitudes de B",
+      "http_status": 200,
+      "passed": true,
+      "observation": "lista filtrada por propietario"
+    },
+    {
+      "case": "A consulta solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno ajeno rechazado"
+    },
+    {
+      "case": "Profesor consulta solicitud abierta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "profesor puede responder solicitud abierta"
+    },
+    {
+      "case": "B consulta su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A crea solicitud para B",
+      "expected": "403 sin crear",
+      "http_status": 403,
+      "passed": true,
+      "observation": "usuarioId ajeno rechazado"
+    },
+    {
+      "case": "B crea su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B edita su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B cierra su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B borra su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A edita solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A cierra solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A borra solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A consulta respuestas de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno ajeno rechazado"
+    },
+    {
+      "case": "Profesor consulta respuestas",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "profesor puede ver solicitud abierta"
+    },
+    {
+      "case": "B consulta respuestas propias",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Alumno crea respuesta",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo profesor/admin"
+    },
+    {
+      "case": "Profesor crea respuesta ajena",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "idUsuario ajeno rechazado"
+    },
+    {
+      "case": "Profesor crea su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A edita respuesta de profesor",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "autor requerido"
+    },
+    {
+      "case": "Profesor edita su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A borra respuesta de profesor",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "autor requerido"
+    },
+    {
+      "case": "Profesor borra su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A acepta respuesta de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo propietario de la solicitud"
+    },
+    {
+      "case": "B acepta respuesta propia",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A califica tutoria de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno participante requerido"
+    },
+    {
+      "case": "B califica su tutoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A consulta calificacion de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "participante requerido"
+    },
+    {
+      "case": "B consulta su calificacion",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
     }
   ]
 }

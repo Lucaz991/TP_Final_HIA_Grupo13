@@ -90,12 +90,13 @@ debe documentarse por separado y con su alcance.
 **Avance 18/11/2026:** ejecutada la prueba acotada de autorización con
 `python security-test/verify.py --authorization`. Se confirmaron y corrigieron
 **H24-AUTH-01** (tutorías ajenas), **H24-AUTH-02** (edición de perfil ajeno),
-**H24-AUTH-03** (horarios ajenos, incluida la ruta legacy) y **H24-BFLA-01**
-(funciones de categorías sin autenticación ni rol). El retest integrado pasó
-**34/34** casos, con accesos indebidos rechazados y controles positivos
+**H24-AUTH-03** (horarios ajenos, incluida la ruta legacy), **H24-BFLA-01**
+(funciones de categorías sin autenticación ni rol) y **H24-AUTH-04**
+(solicitudes, respuestas y calificaciones ajenas). El retest integrado pasó
+**62/62** casos, con accesos indebidos rechazados y controles positivos
 conservados. Se limpiaron los recursos descartables. Queda integrar la rama
-`fix/PT-33-autorizacion-tutorias` y verificar tras despliegue; la revisión de
-solicitudes, respuestas y calificaciones sigue pendiente.
+`fix/PT-33-autorizacion-tutorias` y verificar tras despliegue; siguen pendientes
+la muestra de `/api/admin`, Mercado Pago, chat, auditoría y las pruebas SQLi.
 
 ### 4. Docker, infraestructura y CI/CD
 
