@@ -87,7 +87,7 @@ El comando valida primero el aislamiento, obtiene tokens por login local, crea
 recursos descartables de B, ejecuta la matriz y limpia solo esos recursos.
 Termina con código **2** cuando encuentra incumplimientos y deja el JSON anterior.
 Las tres fallas son hallazgos esperados al reproducir esta versión, no errores
-del arranque del laboratorio. La prueba consume cuatro intentos de login contando
+del arranque del laboratorio. La prueba consume cinco intentos de login contando
 la verificación previa; no ejecutarla repetidamente sin considerar el limitador.
 
 ### Plan de acción para H24-AUTH-01
@@ -114,6 +114,45 @@ y GET/PUT/DELETE ajenos 403. Evidencia posterior:
 Los fixtures se limpiaron. Queda integrar el fix, comprobarlo tras el despliegue
 y revisar otros endpoints/campos; no hubo prueba ni evidencia de explotación en
 producción.
+
+### H24-AUTH-02: modificación del perfil de otro usuario (BOLA/IDOR)
+
+**Estado: corregido en rama de fix y verificado en laboratorio; despliegue pendiente.**
+**Severidad: alta.** `PUT /api/usuario/:id` confiaba en el ID de la ruta sin
+compararlo con `req.userId`. Una prueba con `alumno.a` contra `alumno.b` devolvió
+inicialmente HTTP 500 por una falla posterior del controlador, pero la lectura de
+BD confirmó que el nombre ya había cambiado. Por eso un 500 no puede tratarse
+como rechazo seguro.
+
+**Corrección verificada:** solo el propio usuario o un administrador puede
+actualizar el perfil; los campos permitidos se copian por allowlist. Se eliminó
+la referencia indefinida a `PerfilProfesor`, que producía el 500 después de
+persistir datos. Retest: A → B devolvió **403** sin cambio y B → B devolvió
+**200**.
+
+### H24-AUTH-03: gestión de horarios de otro profesor (BOLA/IDOR)
+
+**Estado: corregido en rama de fix y verificado en laboratorio; despliegue pendiente.**
+**Severidad: alta.** `POST /api/horarioDisponible` aceptaba `profesorId` del
+cliente y `DELETE /api/horarioDisponible/:id` desactivaba cualquier horario por
+ID. En el laboratorio, `alumno.a` pudo crear y desactivar horarios de
+`profesor.b`. La ruta legacy `/api/usuario/horario` repetía el mismo patrón y
+además omitía campos obligatorios del modelo.
+
+**Corrección verificada:** la creación exige profesor propietario o admin, el
+profesor objetivo debe existir y el borrado/desactivación comprueba
+`horario.profesorId` contra `req.userId`. La ruta legacy aplica la misma regla y
+guarda `modalidad`/`estado`. Retest: alta ajena **403**, desactivación ajena
+**403** con estado `activo`, alta y desactivación propias **200**.
+
+### Retest integrado 18/11/2026
+
+`python security-test/verify.py --authorization` pasó **21/21** casos sobre la
+imagen `sha256:e06cd6aaf6d7...`: tutorías, perfil, horarios actuales y ruta
+legacy. La evidencia sin credenciales está en
+`security-test/authorization-results.json`. Pendientes: solicitudes, respuestas,
+calificaciones, revisión completa de endpoints administrativos y validación tras
+despliegue.
 
 ## Informe original del 09/11/2026
 

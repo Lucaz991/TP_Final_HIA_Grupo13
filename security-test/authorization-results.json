@@ -1,15 +1,21 @@
 {
-  "timestamp_utc": "2026-11-18T18:29:17.597400+00:00",
-  "source_commit": "df03912914192b3d92b3b424c447c6eb2090e5e9",
-  "backend_image": "sha256:d02bb705b3841dadd9ef9211eb1e00d18cc4b9393d2c9524110adaeb2f8354cb",
+  "timestamp_utc": "2026-11-18T21:18:09.337727+00:00",
+  "source_commit": "8e4b5844a784df9bc6bd00b12d92d1b5c06414c1",
+  "backend_image": "sha256:e06cd6aaf6d7125dcc618244a538c745316523ad24b5f0461a4052d9109ebe02",
   "target": "http://127.0.0.1:9081",
-  "fixture_ids": [
-    18,
-    19,
-    20,
-    21,
-    22
-  ],
+  "fixture_ids": {
+    "tutorias": [
+      23,
+      24,
+      25,
+      26,
+      27
+    ],
+    "horarios": [
+      13,
+      14
+    ]
+  },
   "fixtures_cleaned": true,
   "results": [
     {
@@ -102,6 +108,62 @@
       "http_status": 200,
       "passed": true,
       "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A modifica perfil de B",
+      "expected": "403 y nombre intacto",
+      "http_status": 403,
+      "passed": true,
+      "observation": "cambio ajeno confirmado en BD: False"
+    },
+    {
+      "case": "B modifica su propio perfil",
+      "expected": "200 sin cambio material",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A crea horario para profesor B",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alta indebida creada: False"
+    },
+    {
+      "case": "A desactiva horario de profesor B",
+      "expected": "403 y horario activo",
+      "http_status": 403,
+      "passed": true,
+      "observation": "estado persistido: activo"
+    },
+    {
+      "case": "Profesor crea su horario",
+      "expected": "200 y recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Profesor desactiva su horario",
+      "expected": "200 y estado inactivo",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: inactivo"
+    },
+    {
+      "case": "A usa ruta legacy de horario ajeno",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "ruta legacy tambien protegida"
+    },
+    {
+      "case": "A borra horario ajeno por ruta legacy",
+      "expected": "403 y horario activo",
+      "http_status": 403,
+      "passed": true,
+      "observation": "estado persistido: activo"
     }
   ]
 }

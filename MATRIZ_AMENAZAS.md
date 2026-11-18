@@ -19,11 +19,14 @@
 
 | ID | Amenaza | Evidencia actual | Impacto / prioridad | Control faltante | Estado |
 |---|---|---|---|---|---|
-| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Falla inicial confirmada y retest 13/13 aprobado en H24 | Alto; integración pendiente | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Corregido en laboratorio; despliegue pendiente |
+| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Falla inicial confirmada y retest integrado aprobado en H24 | Alto; integración pendiente | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Corregido en laboratorio; despliegue pendiente |
+| AM-17 / H24-AUTH-02 | Modificación del perfil de otro usuario por ID | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Comparar `:id` con JWT/admin y limitar campos actualizables | Corregido en laboratorio; despliegue pendiente |
+| AM-18 / H24-AUTH-03 | Alta/desactivación de horarios de otro profesor | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Validar `profesorId` con JWT en rutas actual y legacy | Corregido en laboratorio; despliegue pendiente |
 
 El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
 ninguno de esos controles evitó el acceso individual a recursos ajenos.
-La explotación se confirmó solo en el laboratorio, no en producción.
+La explotación se confirmó solo en el laboratorio, no en producción. El retest
+integrado cubrió **21/21** casos.
 Ver [resultados y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026)
 y [evidencia](security-test/authorization-results.json).
 Las estimaciones y marcas históricas siguientes no reemplazan esta verificación.

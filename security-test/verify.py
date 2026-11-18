@@ -168,6 +168,7 @@ def authorization():
     tag = "H24-AUTH-" + uuid.uuid4().hex
     results = []
     ids = []
+    horario_ids = []
 
     def fixtures(action):
         script = """
@@ -177,6 +178,7 @@ const db = require('./config/database');
 const Usuario = require('./src/models/usuario.model');
 const Categoria = require('./src/models/categoria.model');
 const Tutoria = require('./src/models/tutoria.model');
+const HorarioDisponible = require('./src/models/horarioDisponible.model');
 const { Op } = require('sequelize');
 const [action, tag, rawIds] = process.argv.slice(1);
 const ids = JSON.parse(rawIds);
@@ -213,6 +215,58 @@ const ids = JSON.parse(rawIds);
 """
         output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
                      script, action, tag, json.dumps(ids))
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
+    def horario_fixture(action, horario_id=0):
+        script = """
+require('./security-test/guard.cjs')();
+const assert = require('node:assert/strict');
+const db = require('./config/database');
+const Usuario = require('./src/models/usuario.model');
+const HorarioDisponible = require('./src/models/horarioDisponible.model');
+const [action, rawId] = process.argv.slice(1);
+const id = Number(rawId);
+(async () => {
+  const [identity] = await db.query('SELECT current_database() AS name');
+  assert.equal(identity[0].name, 'h24_security_test');
+  const profesor = await Usuario.findOne({where:{email:'profesor.b@h24.test'}});
+  assert.ok(profesor);
+  let data = null;
+  if (action === 'create') {
+    const row = await HorarioDisponible.create({
+      profesorId:profesor.id, diaSemana:'sabado', horaInicio:'18:00',
+      horaFin:'19:00', modalidad:'virtual', estado:'activo'
+    });
+    data = {id:row.id, profesorId:row.profesorId};
+  } else if (action === 'read') {
+    data = await HorarioDisponible.findByPk(id, {
+      attributes:['id','profesorId','estado'], raw:true
+    });
+  } else {
+    data = await HorarioDisponible.destroy({where:{id}});
+  }
+  console.log('H24_RESULT='+JSON.stringify(data));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, action, str(horario_id))
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
+    def user_field(email, field):
+        script = """
+require('./security-test/guard.cjs')();
+const db = require('./config/database');
+const Usuario = require('./src/models/usuario.model');
+const [email, field] = process.argv.slice(1);
+(async () => {
+  const row = await Usuario.findOne({where:{email}, attributes:['id',field], raw:true});
+  console.log('H24_RESULT='+JSON.stringify(row ? row[field] : null));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, email, field)
         return json.loads(next(line.removeprefix("H24_RESULT=")
                                for line in output.splitlines() if line.startswith("H24_RESULT=")))
 
@@ -337,16 +391,86 @@ const ids = JSON.parse(rawIds);
         remaining = {row["id"] for row in fixtures("read")}
         record("B borra su tutoria", "200 y fila eliminada", status,
                status == 200 and owner_id not in remaining, "control positivo del propietario")
+
+        nombre_b = user_field("alumno.b@h24.test", "nombre")
+        status, _, _ = request(f"/api/usuario/{users['alumno.b']['id']}", {
+            "nombre": tag + "-usuario"
+        }, users["alumno.a"]["token"], "PUT")
+        nombre_actual = user_field("alumno.b@h24.test", "nombre")
+        record("A modifica perfil de B", "403 y nombre intacto", status,
+               status == 403 and nombre_actual == nombre_b,
+               f"cambio ajeno confirmado en BD: {nombre_actual != nombre_b}")
+
+        status, _, _ = request(f"/api/usuario/{users['alumno.b']['id']}", {
+            "nombre": nombre_b
+        }, users["alumno.b"]["token"], "PUT")
+        record("B modifica su propio perfil", "200 sin cambio material", status,
+               status == 200 and user_field("alumno.b@h24.test", "nombre") == nombre_b,
+               "control positivo del propietario")
+
+        horario_ajeno = horario_fixture("create")
+        horario_ids.append(horario_ajeno["id"])
+        status, _, body = request("/api/horarioDisponible", {
+            "profesorId": horario_ajeno["profesorId"], "diaSemana": "domingo",
+            "horaInicio": "10:00", "horaFin": "11:00", "modalidad": "virtual"
+        }, users["alumno.a"]["token"])
+        horario_indebido = (json.loads(body).get("data") or {}).get("id")
+        if horario_indebido:
+            horario_ids.append(horario_indebido)
+        record("A crea horario para profesor B", "403 sin crear recurso", status,
+               status == 403 and not horario_indebido,
+               f"alta indebida creada: {bool(horario_indebido)}")
+
+        status, _, _ = request(f"/api/horarioDisponible/{horario_ajeno['id']}",
+                               token=users["alumno.a"]["token"], method="DELETE")
+        row = horario_fixture("read", horario_ajeno["id"])
+        record("A desactiva horario de profesor B", "403 y horario activo", status,
+               status == 403 and row.get("estado") == "activo",
+               f"estado persistido: {row.get('estado')}")
+
+        status, _, body = request("/api/horarioDisponible", {
+            "profesorId": users["profesor.a"]["id"], "diaSemana": "domingo",
+            "horaInicio": "12:00", "horaFin": "13:00", "modalidad": "virtual"
+        }, users["profesor.a"]["token"])
+        horario_propio = (json.loads(body).get("data") or {}).get("id")
+        if horario_propio:
+            horario_ids.append(horario_propio)
+        record("Profesor crea su horario", "200 y recurso propio", status,
+               status == 200 and bool(horario_propio), "control positivo del propietario")
+
+        status, _, _ = request(f"/api/horarioDisponible/{horario_propio}",
+                               token=users["profesor.a"]["token"], method="DELETE")
+        row = horario_fixture("read", horario_propio)
+        record("Profesor desactiva su horario", "200 y estado inactivo", status,
+               status == 200 and row.get("estado") == "inactivo",
+               f"estado persistido: {row.get('estado')}")
+
+        status, _, _ = request("/api/usuario/horario", {
+            "usuarioId": horario_ajeno["profesorId"], "diaSemana": "domingo",
+            "horaInicio": "14:00", "horaFin": "15:00", "modalidad": "virtual"
+        }, users["alumno.a"]["token"])
+        record("A usa ruta legacy de horario ajeno", "403 sin crear recurso", status,
+               status == 403, "ruta legacy tambien protegida")
+
+        status, _, _ = request(f"/api/usuario/horario/{horario_ajeno['id']}",
+                               token=users["alumno.a"]["token"], method="DELETE")
+        row = horario_fixture("read", horario_ajeno["id"])
+        record("A borra horario ajeno por ruta legacy", "403 y horario activo", status,
+               status == 403 and row.get("estado") == "activo",
+               f"estado persistido: {row.get('estado')}")
     finally:
         if ids:
             assert fixtures("cleanup") == [], "Revisar limpieza de los fixtures marcados"
+        for horario_id in horario_ids:
+            horario_fixture("cleanup", horario_id)
 
     backend_id = run(*COMPOSE, "ps", "-q", "backend")
     image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
     report = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "source_commit": run("git", "rev-parse", "HEAD"),
-        "backend_image": image_id, "target": BASE, "fixture_ids": ids,
+        "backend_image": image_id, "target": BASE,
+        "fixture_ids": {"tutorias": ids, "horarios": horario_ids},
         "fixtures_cleaned": True, "results": results,
     }
     path = ROOT / "security-test" / "authorization-results.json"
