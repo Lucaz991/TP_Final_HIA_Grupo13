@@ -1,7 +1,15 @@
 const RespuestaAyuda = require('./../../models/solicitudes/respuestaAyuda.model');
 const SolicitudAyuda = require('./../../models/solicitudes/solicitudAyuda.model');
+const Usuario = require('./../../models/usuario.model');
 const registrarAuditoria = require("../../helpers/auditoria.helper");
 const respuestaCtrl = {};
+
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+const esAdmin = (usuario) => usuario.rol === 'admin';
+const puedeVerSolicitud = (usuario, solicitud) =>
+    esAdmin(usuario) || usuario.id === solicitud.usuarioId ||
+    (usuario.rol === 'profesor' && solicitud.estado === 'ABIERTA');
+const esAutor = (usuario, respuesta) => usuario.id === respuesta.usuarioId;
 
 // Listar todas las respuestas por ID de solicitud (GET)
 respuestaCtrl.getRespuestasBySolicitud = async (req, res) => {
@@ -21,6 +29,12 @@ respuestaCtrl.getRespuestasBySolicitud = async (req, res) => {
        #swagger.responses[500] = { description: 'Error interno del servidor.' }
     */
     try {
+        const solicitud = await SolicitudAyuda.findByPk(req.params.solicitudId);
+        if (!solicitud) return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || !puedeVerSolicitud(usuario, solicitud)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para ver estas respuestas.' });
+        }
         const respuestas = await RespuestaAyuda.findAll({
             where: { solicitudId: req.params.solicitudId }
         });
@@ -53,6 +67,15 @@ respuestaCtrl.createRespuesta = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al crear respuesta.' }
     */
     try {
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!['profesor', 'admin'].includes(usuario.rol)) {
+            return res.status(403).json({ status: 0, msg: 'Solo un profesor puede responder solicitudes.' });
+        }
+        const usuarioId = Number(req.body.idUsuario || usuario.id);
+        if (!esAdmin(usuario) && usuarioId !== usuario.id) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede crear respuestas con su propio usuario.' });
+        }
         const solicitud = await SolicitudAyuda.findByPk(req.body.idSolicitud);
 
         if (!solicitud) {
@@ -71,7 +94,7 @@ respuestaCtrl.createRespuesta = async (req, res) => {
 
         const nueva = await RespuestaAyuda.create({
             solicitudId: req.body.idSolicitud,
-            usuarioId: req.body.idUsuario,
+            usuarioId,
             respuesta: req.body.respuesta,
             precio: req.body.precio,
             archivoAdjunto: req.body.archivoAdjunto
@@ -118,15 +141,17 @@ respuestaCtrl.editRespuesta = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al actualizar respuesta.' }
     */
     try {
-        await RespuestaAyuda.update({
-            respuesta: req.body.respuesta,
-            precio: req.body.precio,
-            archivoAdjunto: req.body.archivoAdjunto
-        }, {
-            where: {
-                id: req.params.id
-            }
-        });
+        const respuesta = await RespuestaAyuda.findByPk(req.params.id);
+        if (!respuesta) return res.status(404).json({ status: 0, msg: 'Respuesta no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || (!esAdmin(usuario) && !esAutor(usuario, respuesta))) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede modificar sus propias respuestas.' });
+        }
+        const cambios = {};
+        for (const campo of ['respuesta', 'precio', 'archivoAdjunto']) {
+            if (req.body[campo] !== undefined) cambios[campo] = req.body[campo];
+        }
+        await respuesta.update(cambios);
 
         res.json({
             status: 1,
@@ -169,6 +194,14 @@ respuestaCtrl.aceptarRespuesta = async (req, res) => {
                 msg: 'Respuesta no encontrada.'
             });
         }
+        const solicitud = await SolicitudAyuda.findByPk(respuesta.solicitudId);
+        if (!solicitud) {
+            return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada.' });
+        }
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || (!esAdmin(usuario) && usuario.id !== solicitud.usuarioId)) {
+            return res.status(403).json({ status: 0, msg: 'Solo el autor de la solicitud puede aceptar respuestas.' });
+        }
 
         await respuesta.update({
             estado: 'ACEPTADA'
@@ -179,7 +212,7 @@ respuestaCtrl.aceptarRespuesta = async (req, res) => {
             "RespuestaAyuda",
             respuesta.id,
             "Se aceptó una respuesta de ayuda.",
-            respuesta.id_usuario
+            respuesta.usuarioId
         );
 
         await SolicitudAyuda.update({
@@ -195,7 +228,7 @@ respuestaCtrl.aceptarRespuesta = async (req, res) => {
             "RespuestaAyuda",
             respuesta.id,
             "Se aceptó una respuesta de ayuda.",
-            respuesta.id_usuario
+            respuesta.usuarioId
         );
 
         res.json({
@@ -230,18 +263,20 @@ respuestaCtrl.deleteRespuesta = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al eliminar respuesta.' }
     */
     try {
-        await RespuestaAyuda.destroy({
-            where: {
-                id: req.params.id
-            }
-        });
+        const respuesta = await RespuestaAyuda.findByPk(req.params.id);
+        if (!respuesta) return res.status(404).json({ status: 0, msg: 'Respuesta no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || (!esAdmin(usuario) && !esAutor(usuario, respuesta))) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede eliminar sus propias respuestas.' });
+        }
+        await respuesta.destroy();
                 await registrarAuditoria(
             req,
             "DELETE",
             "RespuestaAyuda",
             req.params.id,
             "Se eliminó una respuesta de ayuda.",
-            respuesta?.id_usuario
+            respuesta.usuarioId
         );
 
         res.json({

@@ -173,6 +173,7 @@ def authorization(verified_users):
     ids = []
     horario_ids = []
     categoria_ids = []
+    ayuda_ids = {}
 
     def fixtures(action):
         script = """
@@ -289,6 +290,68 @@ const id = Number(rawId);
 """
         output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
                      script, action, str(categoria_id), tag)
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
+    def ayuda_fixture(action, fixture_ids=None):
+        fixture_ids = fixture_ids or {}
+        script = """
+require('./security-test/guard.cjs')();
+const assert = require('node:assert/strict');
+const db = require('./config/database');
+const Usuario = require('./src/models/usuario.model');
+const Categoria = require('./src/models/categoria.model');
+const Tutoria = require('./src/models/tutoria.model');
+const Calificacion = require('./src/models/calificacion.model');
+const { SolicitudAyuda, RespuestaAyuda } =
+  require('./src/models/solicitudes/asociaciones.model');
+const { Op } = require('sequelize');
+const [action, rawIds, tag] = process.argv.slice(1);
+const ids = JSON.parse(rawIds);
+(async () => {
+  const [identity] = await db.query('SELECT current_database() AS name');
+  assert.equal(identity[0].name, 'h24_security_test');
+  let data = null;
+  if (action === 'create') {
+    const alumno = await Usuario.findOne({where:{email:'alumno.b@h24.test'}});
+    const profesor = await Usuario.findOne({where:{email:'profesor.a@h24.test'}});
+    const categoria = await Categoria.findOne({where:{nombre:'Matematica H24'}});
+    assert.ok(alumno && profesor && categoria);
+    const solicitudes = [];
+    for (const name of ['edit','close','delete','resp']) {
+      const row = await SolicitudAyuda.create({
+        usuarioId:alumno.id, categoriaId:categoria.id,
+        titulo:tag + '-sol-' + name, descripcion:tag
+      });
+      solicitudes.push(row.id);
+    }
+    const respuesta = await RespuestaAyuda.create({
+      solicitudId:solicitudes[3], usuarioId:profesor.id,
+      respuesta:tag + '-resp-aceptar', precio:100
+    });
+    const tutoria = await Tutoria.create({
+      alumnoId:alumno.id, profesorId:profesor.id, categoriaId:categoria.id,
+      fechaHora:'2026-11-23T16:00:00Z', modalidad:'virtual',
+      estado:'finalizada', precioAcordado:100, mensaje:tag + '-cal',
+      pagada:true
+    });
+    data = {solicitudes, respuestas:[respuesta.id], tutorias:[tutoria.id]};
+  } else {
+    await RespuestaAyuda.destroy({where:{[Op.or]:[
+      {id:{[Op.in]:ids.respuestas || []}}, {respuesta:{[Op.like]:tag + '%'}}
+    ]}});
+    await SolicitudAyuda.destroy({where:{[Op.or]:[
+      {id:{[Op.in]:ids.solicitudes || []}}, {titulo:{[Op.like]:tag + '%'}}
+    ]}});
+    await Calificacion.destroy({where:{comentario:{[Op.like]:tag + '%'}}});
+    await Tutoria.destroy({where:{mensaje:{[Op.like]:tag + '%'}}});
+    data = true;
+  }
+  console.log('H24_RESULT='+JSON.stringify(data));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, action, json.dumps(fixture_ids), tag)
         return json.loads(next(line.removeprefix("H24_RESULT=")
                                for line in output.splitlines() if line.startswith("H24_RESULT=")))
 
@@ -574,6 +637,154 @@ const [email, field] = process.argv.slice(1);
         record("Admin borra categoria", "200 y recurso ausente", status,
                status == 200 and row is None,
                "control positivo administrativo")
+
+        ayuda_ids = ayuda_fixture("create")
+        sol_ids = ayuda_ids["solicitudes"]
+        resp_aceptar = ayuda_ids["respuestas"][0]
+        tutoria_calificar = ayuda_ids["tutorias"][0]
+
+        status, _, body = request("/api/solicitud", token=users["alumno.a"]["token"])
+        visibles = {row["id"] for row in json.loads(body).get("data", [])}
+        record("Listado solicitudes de A", "200 sin solicitudes de B", status,
+               status == 200 and not visibles.intersection(sol_ids),
+               "lista filtrada por propietario")
+        status, _, _ = request(f"/api/solicitud/{sol_ids[0]}",
+                               token=users["alumno.a"]["token"])
+        record("A consulta solicitud de B", "403", status,
+               status == 403, "alumno ajeno rechazado")
+        status, _, _ = request(f"/api/solicitud/{sol_ids[3]}",
+                               token=users["profesor.a"]["token"])
+        record("Profesor consulta solicitud abierta", "200", status,
+               status == 200, "profesor puede responder solicitud abierta")
+        status, _, _ = request(f"/api/solicitud/{sol_ids[3]}",
+                               token=users["alumno.b"]["token"])
+        record("B consulta su solicitud", "200", status,
+               status == 200, "control positivo del propietario")
+
+        status, _, body = request("/api/solicitud", {
+            "usuarioId": users["alumno.b"]["id"], "categoriaId": categoria_id,
+            "titulo": tag + "-sol-imp", "descripcion": "impersonada"
+        }, users["alumno.a"]["token"])
+        record("A crea solicitud para B", "403 sin crear", status,
+               status == 403, "usuarioId ajeno rechazado")
+        status, _, body = request("/api/solicitud", {
+            "usuarioId": users["alumno.b"]["id"], "categoriaId": categoria_id,
+            "titulo": tag + "-sol-own", "descripcion": "propia"
+        }, users["alumno.b"]["token"])
+        solicitud_propia = (json.loads(body).get("data") or {}).get("id")
+        record("B crea su solicitud", "200", status,
+               status == 200 and bool(solicitud_propia), "control positivo")
+        if solicitud_propia:
+            status, _, _ = request(f"/api/solicitud/{solicitud_propia}", {
+                "titulo": tag + "-sol-own-edit"
+            }, users["alumno.b"]["token"], "PUT")
+            record("B edita su solicitud", "200", status,
+                   status == 200, "control positivo")
+            status, _, _ = request(f"/api/solicitud/{solicitud_propia}/cerrar",
+                                   token=users["alumno.b"]["token"], method="PUT")
+            record("B cierra su solicitud", "200", status,
+                   status == 200, "control positivo")
+            status, _, _ = request(f"/api/solicitud/{solicitud_propia}",
+                                   token=users["alumno.b"]["token"], method="DELETE")
+            record("B borra su solicitud", "200", status,
+                   status == 200, "control positivo")
+
+        status, _, _ = request(f"/api/solicitud/{sol_ids[0]}", {
+            "titulo": tag + "-sol-mod"
+        }, users["alumno.a"]["token"], "PUT")
+        record("A edita solicitud de B", "403", status,
+               status == 403, "propietario requerido")
+        status, _, _ = request(f"/api/solicitud/{sol_ids[1]}/cerrar",
+                               token=users["alumno.a"]["token"], method="PUT")
+        record("A cierra solicitud de B", "403", status,
+               status == 403, "propietario requerido")
+        status, _, _ = request(f"/api/solicitud/{sol_ids[2]}",
+                               token=users["alumno.a"]["token"], method="DELETE")
+        record("A borra solicitud de B", "403", status,
+               status == 403, "propietario requerido")
+
+        status, _, _ = request(f"/api/respuesta/solicitud/{sol_ids[3]}",
+                               token=users["alumno.a"]["token"])
+        record("A consulta respuestas de B", "403", status,
+               status == 403, "alumno ajeno rechazado")
+        status, _, _ = request(f"/api/respuesta/solicitud/{sol_ids[3]}",
+                               token=users["profesor.a"]["token"])
+        record("Profesor consulta respuestas", "200", status,
+               status == 200, "profesor puede ver solicitud abierta")
+        status, _, _ = request(f"/api/respuesta/solicitud/{sol_ids[3]}",
+                               token=users["alumno.b"]["token"])
+        record("B consulta respuestas propias", "200", status,
+               status == 200, "control positivo del propietario")
+
+        status, _, _ = request("/api/respuesta", {
+            "idSolicitud": sol_ids[3], "idUsuario": users["alumno.a"]["id"],
+            "respuesta": tag + "-resp-a", "precio": 10
+        }, users["alumno.a"]["token"])
+        record("Alumno crea respuesta", "403", status,
+               status == 403, "solo profesor/admin")
+        status, _, _ = request("/api/respuesta", {
+            "idSolicitud": sol_ids[3], "idUsuario": 5,
+            "respuesta": tag + "-resp-imp", "precio": 10
+        }, users["profesor.a"]["token"])
+        record("Profesor crea respuesta ajena", "403", status,
+               status == 403, "idUsuario ajeno rechazado")
+        status, _, body = request("/api/respuesta", {
+            "idSolicitud": sol_ids[3], "idUsuario": users["profesor.a"]["id"],
+            "respuesta": tag + "-resp-own", "precio": 10
+        }, users["profesor.a"]["token"])
+        respuesta_propia = (json.loads(body).get("data") or {}).get("id")
+        record("Profesor crea su respuesta", "200", status,
+               status == 200 and bool(respuesta_propia), "control positivo")
+        if respuesta_propia:
+            ayuda_ids["respuestas"].append(respuesta_propia)
+            status, _, _ = request(f"/api/respuesta/{respuesta_propia}", {
+                "respuesta": tag + "-resp-mod"
+            }, users["alumno.a"]["token"], "PUT")
+            record("A edita respuesta de profesor", "403", status,
+                   status == 403, "autor requerido")
+            status, _, _ = request(f"/api/respuesta/{respuesta_propia}", {
+                "respuesta": tag + "-resp-own-edit"
+            }, users["profesor.a"]["token"], "PUT")
+            record("Profesor edita su respuesta", "200", status,
+                   status == 200, "control positivo")
+            status, _, _ = request(f"/api/respuesta/{respuesta_propia}",
+                                   token=users["alumno.a"]["token"], method="DELETE")
+            record("A borra respuesta de profesor", "403", status,
+                   status == 403, "autor requerido")
+            status, _, _ = request(f"/api/respuesta/{respuesta_propia}",
+                                   token=users["profesor.a"]["token"], method="DELETE")
+            record("Profesor borra su respuesta", "200", status,
+                   status == 200, "control positivo")
+
+        status, _, _ = request(f"/api/respuesta/{resp_aceptar}/aceptar",
+                               token=users["alumno.a"]["token"], method="PUT")
+        record("A acepta respuesta de B", "403", status,
+               status == 403, "solo propietario de la solicitud")
+        status, _, _ = request(f"/api/respuesta/{resp_aceptar}/aceptar",
+                               token=users["alumno.b"]["token"], method="PUT")
+        record("B acepta respuesta propia", "200", status,
+               status == 200, "control positivo del propietario")
+
+        status, _, _ = request("/api/calificacion", {
+            "tutoriaId": tutoria_calificar, "calificacion": 5,
+            "comentario": tag + "-cal-imp"
+        }, users["alumno.a"]["token"])
+        record("A califica tutoria de B", "403", status,
+               status == 403, "alumno participante requerido")
+        status, _, _ = request("/api/calificacion", {
+            "tutoriaId": tutoria_calificar, "calificacion": 5,
+            "comentario": tag + "-cal-own"
+        }, users["alumno.b"]["token"])
+        record("B califica su tutoria", "200", status,
+               status == 200, "control positivo del propietario")
+        status, _, _ = request(f"/api/calificacion/tutoria/{tutoria_calificar}",
+                               token=users["alumno.a"]["token"])
+        record("A consulta calificacion de B", "403", status,
+               status == 403, "participante requerido")
+        status, _, _ = request(f"/api/calificacion/tutoria/{tutoria_calificar}",
+                               token=users["alumno.b"]["token"])
+        record("B consulta su calificacion", "200", status,
+               status == 200, "control positivo del propietario")
     finally:
         if ids:
             assert fixtures("cleanup") == [], "Revisar limpieza de los fixtures marcados"
@@ -581,6 +792,8 @@ const [email, field] = process.argv.slice(1);
             horario_fixture("cleanup", horario_id)
         for categoria_id in categoria_ids:
             categoria_fixture("cleanup", categoria_id)
+        if ayuda_ids:
+            ayuda_fixture("cleanup", ayuda_ids)
 
     backend_id = run(*COMPOSE, "ps", "-q", "backend")
     image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
@@ -589,7 +802,8 @@ const [email, field] = process.argv.slice(1);
         "source_commit": run("git", "rev-parse", "HEAD"),
         "backend_image": image_id, "target": BASE,
         "fixture_ids": {
-            "tutorias": ids, "horarios": horario_ids, "categorias": categoria_ids
+            "tutorias": ids, "horarios": horario_ids, "categorias": categoria_ids,
+            "ayuda": ayuda_ids
         },
         "fixtures_cleaned": True, "results": results,
     }

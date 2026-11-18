@@ -1,7 +1,19 @@
+const { Op } = require('sequelize');
 const SolicitudAyuda = require('../../models/solicitudes/solicitudAyuda.model');
 const RespuestaAyuda = require('../../models/solicitudes/respuestaAyuda.model');
+const Usuario = require('../../models/usuario.model');
 const registrarAuditoria = require("../../helpers/auditoria.helper");
 const solicitudCtrl = {};
+
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+
+const esAdmin = (usuario) => usuario.rol === 'admin';
+const esPropietario = (usuario, solicitud) => usuario.id === solicitud.usuarioId;
+const puedeVerSolicitud = (usuario, solicitud) =>
+    esAdmin(usuario) || esPropietario(usuario, solicitud) ||
+    (usuario.rol === 'profesor' && solicitud.estado === 'ABIERTA');
+const puedeGestionarSolicitud = (usuario, solicitud) =>
+    esAdmin(usuario) || esPropietario(usuario, solicitud);
 
 // Listar todas las solicitudes (GET)
 solicitudCtrl.getSolicitudes = async (req, res) => {
@@ -15,7 +27,12 @@ solicitudCtrl.getSolicitudes = async (req, res) => {
        #swagger.responses[500] = { description: 'Error interno del servidor.' }
     */
     try {
-        const solicitudes = await SolicitudAyuda.findAll();
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        const where = esAdmin(usuario) ? {} :
+            usuario.rol === 'profesor' ? { [Op.or]: [{ usuarioId: usuario.id }, { estado: 'ABIERTA' }] } :
+            { usuarioId: usuario.id };
+        const solicitudes = await SolicitudAyuda.findAll({ where });
         res.json({ status: 1, msg: 'success', data: solicitudes });
     } catch (error) {
         res.status(500).json({ status: 0, msg: 'Error al obtener solicitudes' });
@@ -47,7 +64,11 @@ solicitudCtrl.getSolicitud = async (req, res) => {
                 
             ]
         });
-        if (!solicitud) return res.json({ status: 0, msg: 'Solicitud no encontrada' });
+        if (!solicitud) return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || !puedeVerSolicitud(usuario, solicitud)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para ver esta solicitud.' });
+        }
 
         res.json({ status: 1, msg: 'success', data: solicitud });
     } catch (error) {
@@ -79,8 +100,14 @@ solicitudCtrl.createSolicitud = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al crear solicitud.' }
     */
     try {
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        const usuarioId = Number(req.body.usuarioId || usuario.id);
+        if (!esAdmin(usuario) && usuarioId !== usuario.id) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede crear solicitudes para su propio usuario.' });
+        }
         const nueva = await SolicitudAyuda.create({
-            usuarioId: req.body.usuarioId,
+            usuarioId,
             categoriaId: req.body.categoriaId,
             titulo: req.body.titulo,
             descripcion: req.body.descripcion,
@@ -131,12 +158,17 @@ solicitudCtrl.editSolicitud = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al actualizar solicitud.' }
     */
     try {
-        await SolicitudAyuda.update({
-            titulo: req.body.titulo,
-            descripcion: req.body.descripcion,
-            categoriaId: req.body.categoriaId,
-            archivoAdjunto: req.body.archivoAdjunto
-        }, { where: { id: req.params.id } });
+        const solicitud = await SolicitudAyuda.findByPk(req.params.id);
+        if (!solicitud) return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || !puedeGestionarSolicitud(usuario, solicitud)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede modificar sus propias solicitudes.' });
+        }
+        const cambios = {};
+        for (const campo of ['titulo', 'descripcion', 'categoriaId', 'archivoAdjunto']) {
+            if (req.body[campo] !== undefined) cambios[campo] = req.body[campo];
+        }
+        await solicitud.update(cambios);
         await registrarAuditoria(
             req,
             "UPDATE",
@@ -171,17 +203,19 @@ solicitudCtrl.cerrarSolicitud = async (req, res) => {
     */
     try {
         const solicitud = await SolicitudAyuda.findByPk(req.params.id);
-        await SolicitudAyuda.update(
-            { estado: 'CERRADA' },
-            { where: { id: req.params.id } }
-        );
+        if (!solicitud) return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || !puedeGestionarSolicitud(usuario, solicitud)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede cerrar sus propias solicitudes.' });
+        }
+        await solicitud.update({ estado: 'CERRADA' });
          await registrarAuditoria(
             req,
             "UPDATE",
             "SolicitudAyuda",
             solicitud.id,
             `Se cerró la solicitud "${solicitud.titulo}"`,
-            solicitud.id_usuario
+            solicitud.usuarioId
         );
         res.json({ status: 1, msg: 'Solicitud cerrada correctamente' });
     } catch (error) {
@@ -209,14 +243,19 @@ solicitudCtrl.deleteSolicitud = async (req, res) => {
     */
     try {
         const solicitud = await SolicitudAyuda.findByPk(req.params.id);
-        await SolicitudAyuda.destroy({ where: { id: req.params.id } });
+        if (!solicitud) return res.status(404).json({ status: 0, msg: 'Solicitud no encontrada.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario || !puedeGestionarSolicitud(usuario, solicitud)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede eliminar sus propias solicitudes.' });
+        }
+        await solicitud.destroy();
           await registrarAuditoria(
             req,
             "DELETE",
             "SolicitudAyuda",
             req.params.id,
-            `Se eliminó la solicitud "${solicitud?.titulo}"`,
-            solicitud?.id_usuario
+            `Se eliminó la solicitud "${solicitud.titulo}"`,
+            solicitud.usuarioId
         );
         res.json({ status: 1, msg: 'Solicitud eliminada correctamente' });
     } catch (error) {
