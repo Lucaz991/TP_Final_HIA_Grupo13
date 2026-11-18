@@ -96,10 +96,12 @@ debe documentarse por separado y con su alcance.
 **62/62** casos, con accesos indebidos rechazados y controles positivos
 conservados. Se limpiaron los recursos descartables. Además, la matriz SQLi
 controlada pasó **37/37** casos sobre rutas, filtros, búsquedas admin y login,
-sin ejecución inyectada ni cambios en las tablas. Queda integrar la rama
-`fix/PT-33-autorizacion-tutorias` y verificar tras despliegue; siguen pendientes
-la muestra de `/api/admin`, Mercado Pago, chat, auditoría y revisión de errores
-de validación observados durante SQLi.
+sin ejecución inyectada ni cambios en las tablas. Mercado Pago quedó protegido
+con tipo de entidad explícito, autorización del pagador, URL configurable,
+firma HMAC del webhook e idempotencia; su simulación local pasó **13/13**
+casos. Queda integrar la rama `fix/PT-33-autorizacion-tutorias` y verificar
+tras despliegue; siguen pendientes la muestra de `/api/admin`, chat, auditoría
+y revisión de errores de validación observados durante SQLi.
 
 ### 4. Docker, infraestructura y CI/CD
 

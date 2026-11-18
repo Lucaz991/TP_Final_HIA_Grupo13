@@ -24,14 +24,17 @@
 | AM-18 / H24-AUTH-03 | Alta/desactivación de horarios de otro profesor | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Validar `profesorId` con JWT en rutas actual y legacy | Corregido en laboratorio; despliegue pendiente |
 | AM-19 / H24-BFLA-01 | Funciones de categorías sin autenticación ni rol | Acciones sin token confirmadas y retest 401/403/200 aprobado | Alto; integración pendiente | `verifyToken`, `verifyAdmin` y propiedad del profesor en asociaciones | Corregido en laboratorio; despliegue pendiente |
 | AM-20 / H24-AUTH-04 | Solicitudes, respuestas y calificaciones ajenas por ID | Operaciones cruzadas confirmadas y retest 403/200 aprobado | Alto; integración pendiente | Validar propietario, autor, rol profesor y participación en la solicitud/tutoría | Corregido en laboratorio; despliegue pendiente |
+| AM-21 / H24-MP-01 | Pago de recursos ajenos y webhook falsificable de Mercado Pago | 13/13 casos de autorización y firma HMAC aprobados contra simulador local | Crítico; integración y validación del proveedor pendientes | Firma `x-signature`, tipo/ID explícito, pagador propietario, URL configurable, importe servidor e idempotencia | Corregido en laboratorio; despliegue y secreto real pendientes |
 | AM-01 / H24-SQLI-01 | Inyección SQL en rutas, filtros, búsquedas admin y login | 37/37 probes controlados sin ejecución ni cambios en tablas | Residual: alcance limitado a endpoints y técnicas seleccionadas | Mantener parametrización y validación; repetir si cambian consultas o se agregan endpoints | Probado en laboratorio; no hallada en el alcance ejecutado |
 
 El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
 ninguno de esos controles evitó el acceso individual a recursos ajenos.
 La explotación se confirmó solo en el laboratorio, no en producción. El retest
-integrado cubrió **62/62** casos.
-Ver [resultados y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026)
-y [evidencia](security-test/authorization-results.json).
+integrado cubrió **62/62** casos; la matriz de Mercado Pago agregó **13/13**
+casos contra el adaptador local, sin llamadas al proveedor real.
+Ver [resultados y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026),
+[autorización](security-test/authorization-results.json) y
+[pagos](security-test/mercadopago-results.json).
 Las estimaciones y marcas históricas siguientes no reemplazan esta verificación.
 
 ## Antecedente original

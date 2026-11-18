@@ -143,7 +143,17 @@ DB_REPLICA_PORT=5435  # Puerto host
 
 # pgAdmin
 PGADMIN_PORT=5051
+
+# Mercado Pago
+MP_WEBHOOK_SECRET=<secreto configurado en el panel de Webhooks>
+MERCADOPAGO_NOTIFICATION_URL=https://tutorias.hia-26.com/api/mercadopago/webhook
 ```
+
+El webhook de Mercado Pago debe quedar público: el proveedor no envía JWT ni
+completa Cloudflare Access. La autenticación la hace la firma HMAC del backend.
+Si en el futuro se protege `tutorias.hia-26.com` con Access, crear una excepción
+o una política equivalente para `POST /api/mercadopago/webhook` antes de activar
+pagos reales.
 
 ## Pasos Siguientes (Mañana con equipo)
 

@@ -225,6 +225,62 @@ devolver HTTP 200 con `status:0`. No se observó bypass ni ejecución SQL, pero
 conviene normalizar esas respuestas para facilitar monitoreo y evitar falsos
 positivos en futuras pruebas.
 
+### H24-MP-01: webhook y preferencias de Mercado Pago
+
+**Estado: corregido en rama de fix y verificado con simulador local; despliegue y configuración del proveedor pendientes.**
+**Severidad: crítica.** La integración original combinaba tres defectos:
+
+- El webhook exigía JWT, un modelo incompatible con las notificaciones de Mercado
+  Pago, y no validaba la firma HMAC enviada por el proveedor.
+- La creación de preferencias aceptaba un ID ambiguo: primero intentaba resolver
+  una respuesta de ayuda y luego una tutoría. Cualquier usuario autenticado podía
+  generar una preferencia sobre el recurso de otro pagador.
+- `notification_url` estaba hardcodeada a una URL temporal de ngrok y el proceso
+  esperaba la respuesta del proveedor antes de confirmar la notificación.
+
+**Corrección verificada:**
+
+- El webhook quedó público y autenticado con `x-signature` + `x-request-id`:
+  manifiesto `id:<data.id>;request-id:<id>;ts:<ts>;`, HMAC-SHA256,
+  comparación en tiempo constante y tolerancia de 5 minutos. Devuelve **400**
+  ante headers ausentes/mal formados, **401** ante firma inválida o timestamp
+  expirado y **503** si falta `MP_WEBHOOK_SECRET`.
+- El endpoint de preferencias ahora exige `tipo` (`ayuda` o `tutoria`) e
+  `entidadId`. Para ayuda, el pagador es el propietario de la solicitud; para
+  tutoría, el `alumnoId`. Solo ese pagador o admin puede iniciar el checkout.
+- Se rechazan respuestas no aceptadas, tutorías en estados no pagables y
+  recursos ya marcados como pagados. El importe se toma exclusivamente del
+  modelo del servidor, no del `precio` enviado por el cliente.
+- `MERCADOPAGO_NOTIFICATION_URL` reemplaza la URL temporal. En producción debe
+  configurarse con el dominio HTTPS final; en el laboratorio apunta al backend
+  interno y el adaptador se reemplaza por un simulador.
+- Tras validar la firma, el endpoint responde **200** y procesa la notificación
+  en segundo plano. El servicio consulta el pago al proveedor, exige estado
+  `approved`, referencia externa estricta `ayuda|tutoria:<id>`, moneda ARS e
+  importe coincidente. Si la entidad conserva `preferenceId`, también lo
+  compara con el pago. Repetir el mismo `paymentId` no duplica la actualización.
+- Se corrigió el helper de auditoría para no fallar cuando el evento proviene
+  del webhook y no tiene `req.body`; el actor auditado es el pagador real.
+
+Comando y resultado:
+
+```powershell
+python security-test/verify.py --mercadopago
+```
+
+**13/13 casos aprobaron** sobre el commit `fff1c8ae` y la imagen
+`sha256:1396ad19a33f...`: preferencia sin token **401**, compra de recursos
+ajenos **403**, preferencias propias **200** contra el simulador, tipo/ID
+inválidos **400**, webhook sin firma/mal formado **400**, firma inválida o
+expirada **401**, y webhook firmado sin JWT **200** procesado localmente.
+Evidencia: `security-test/mercadopago-results.json`.
+
+**Límite:** el laboratorio no contiene `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY` ni el
+secreto real, y no contacta a Mercado Pago. La prueba valida el contrato HTTP,
+autorización del pagador y la lógica HMAC del backend contra un cliente
+simulado; falta validar el secreto real y una notificación real en el ambiente
+publicado.
+
 ### Retest integrado 18/11/2026
 
 `python security-test/verify.py --authorization` pasó **62/62** casos sobre el
@@ -232,8 +288,8 @@ commit `dd76a29e` y la imagen `sha256:7139bcc87ea7...`: tutorías, perfil,
 horarios actuales, ruta legacy, categorías, solicitudes, respuestas y
 calificaciones. La evidencia sin credenciales está en
 `security-test/authorization-results.json`. Pendientes: muestra representativa
-de `/api/admin`, Mercado Pago, chat, auditoría, normalización de errores de
-validación y validación tras despliegue.
+de `/api/admin`, chat, auditoría, normalización de errores de validación y
+validación tras despliegue.
 
 ## Informe original del 09/11/2026
 

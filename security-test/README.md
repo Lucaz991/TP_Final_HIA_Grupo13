@@ -78,13 +78,16 @@ produccion. Las diferencias de ejecucion son:
   externos del navegador. Google Sign-In, fuentes remotas, geolocalizacion y
   traducciones remotas de DataTables pueden no estar disponibles; son limitaciones
   deliberadas. CSP no controla la navegacion manual a enlaces externos.
-- Las rutas de pagos/webhooks, IA y login/registro con Google devuelven `503`
-  desde Nginx. Se usa login local. Este `503` no demuestra que la integracion
-  real sea segura; esos endpoints quedan fuera de estas pruebas.
+- IA y login/registro con Google devuelven `503` desde Nginx. Se usa login
+  local. Este `503` no demuestra que la integracion real sea segura.
 - Calendar se sustituye por `calendar.cjs`: devuelve IDs `h24-simulated-*` y
   ningun enlace Meet ni envio de invitaciones/correos.
-- Los adaptadores de pagos e IA tambien se sustituyen por funciones que rechazan
-  la operacion si se llama directamente al backend.
+- Mercado Pago se sustituye por `mercadoPago.service.cjs`: devuelve un checkout
+  local `http://127.0.0.1:9081/pago-simulado...` y marca el procesamiento del
+  webhook en auditoria. El controlador y la validacion HMAC son los del backend
+  real; no se usa `MP_ACCESS_TOKEN` ni se contacta al proveedor.
+- El adaptador de IA se sustituye por una funcion que rechaza la operacion si
+  se llama directamente al backend.
 - `start.cjs` rechaza variables de proveedores y exige los nombres/credenciales
   de prueba antes de iniciar la aplicacion. No se incluyen claves de Google,
   Mercado Pago, IA ni correo. En el codigo revisado, las invitaciones por correo
@@ -120,9 +123,10 @@ los endpoints deshabilitados. No seguir enlaces a dominios externos. Acordar
 antes cada prueba activa; no comenzar con un escaneo ilimitado o de carga.
 
 El laboratorio permite preparar pruebas de autenticacion, roles, propiedad de
-recursos, validacion y SQLi. No cubre alta disponibilidad, volumen de 6M, TLS
-publico, Cloudflare, proveedores reales ni n8n. Un control no validado sigue
-pendiente aunque el entorno levante correctamente.
+recursos, validacion, SQLi y el contrato/firma del webhook de Mercado Pago con
+un adaptador local. No cubre alta disponibilidad, volumen de 6M, TLS publico,
+Cloudflare, proveedores reales ni n8n. Un control no validado sigue pendiente
+aunque el entorno levante correctamente.
 
 ## Detener, conservar o reiniciar
 
@@ -194,6 +198,24 @@ login no emitió token. Como observación de robustez, algunos IDs malformados
 devuelven 500 genérico y un login inexistente devuelve HTTP 200 con
 `status:0`: no hubo bypass, pero conviene normalizar respuestas en otra tarea.
 
+Prueba local de preferencias y webhook de Mercado Pago:
+
+```powershell
+python security-test/verify.py --mercadopago
+```
+
+Crea una respuesta aceptada y una tutoría descartables para `alumno.b`. Prueba
+que no se pueda crear preferencia sin token ni sobre recursos ajenos, que el
+pagador propietario sí reciba un checkout local y que el webhook exija firma
+HMAC, request ID y timestamp reciente sin JWT. Consume tres intentos de login
+(dos de la verificación y uno para B); combinarla con otras matrices puede
+alcanzar el limitador.
+
+Resultado: **13/13 casos aprobaron** en `security-test/mercadopago-results.json`.
+El adaptador es simulado y no llama a Mercado Pago; la configuración real de
+`MP_WEBHOOK_SECRET`, `MERCADOPAGO_NOTIFICATION_URL` y una notificación del
+proveedor quedan pendientes para el ambiente publicado.
+
 Registrar: identificador, commit/imagen, endpoint, cuenta ficticia y rol, pasos,
 resultado esperado/observado, evidencia sin tokens, impacto, responsable y
 correccion. Repetir la prueba tras el fix. Los fallos de la CSP/producto real se
@@ -207,7 +229,8 @@ del laboratorio incorporados en este cambio. Los tres contenedores quedaron
 `healthy` y el unico puerto publicado fue `127.0.0.1:9081`.
 
 - `verify.py` termino correctamente: controles de topologia, salida TCP del
-  backend, pagina/API, CSP local, integraciones deshabilitadas y Calendar simulado.
+  backend, pagina/API, CSP local, Google/IA deshabilitados y adaptadores de
+  Calendar/Mercado Pago simulados.
 - Login local probado con alumno y administrador. `/api/admin/summary` devolvio
   401 sin token, 403 con alumno y 200 con administrador.
 - El listado del alumno A devolvio sus dos tutorias sinteticas. Esto no valida

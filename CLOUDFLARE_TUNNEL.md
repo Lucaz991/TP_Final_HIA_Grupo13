@@ -87,6 +87,9 @@ funcionan igual en cualquier máquina que corra el mismo `compose.yaml`.
 - Dashboard Cloudflare → **Networks → Tunnels → grupo13-server**:
   columna **Replicas** muestra cuántas máquinas están conectadas.
 - `https://tutorias.hia-26.com` debe responder desde cualquier dispositivo.
+- `https://tutorias.hia-26.com/api/mercadopago/webhook` debe quedar público
+  para `POST` de Mercado Pago. No agregarlo a Cloudflare Access: la seguridad
+  la provee `MP_WEBHOOK_SECRET` + firma HMAC del backend.
 
 ## Notas
 

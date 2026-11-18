@@ -1,0 +1,101 @@
+{
+  "timestamp_utc": "2026-11-18T23:43:13.552676+00:00",
+  "source_commit": "fff1c8ae0941ffca7c0311613ec114d3d910f29f",
+  "backend_image": "sha256:1396ad19a33ff6f3530f9ef994b750bf1f510eec99f1cb6f93205b247f6d87e5",
+  "target": "http://127.0.0.1:9081",
+  "scope": "autorizacion de preferencia y validacion HMAC local; sin llamadas a Mercado Pago",
+  "fixtures_cleaned": true,
+  "results": [
+    {
+      "case": "Sin token crea preferencia",
+      "expected": "401; precio del cliente ignorado",
+      "http_status": 401,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "A compra respuesta aceptada de B",
+      "expected": "403; precio del cliente ignorado",
+      "http_status": 403,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "A compra tutoria de B",
+      "expected": "403; precio del cliente ignorado",
+      "http_status": 403,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "B compra respuesta aceptada",
+      "expected": "200; precio del cliente ignorado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "simulador local"
+    },
+    {
+      "case": "B compra su tutoria",
+      "expected": "200; precio del cliente ignorado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "simulador local"
+    },
+    {
+      "case": "Tipo de pago invalido",
+      "expected": "400; precio del cliente ignorado",
+      "http_status": 400,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "ID de pago invalido",
+      "expected": "400; precio del cliente ignorado",
+      "http_status": 400,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "Webhook sin firma",
+      "expected": "400 y sin procesar",
+      "http_status": 400,
+      "passed": true,
+      "observation": "headers HMAC ausentes"
+    },
+    {
+      "case": "Webhook con firma incompleta",
+      "expected": "400 y sin procesar",
+      "http_status": 400,
+      "passed": true,
+      "observation": "falta timestamp en x-signature"
+    },
+    {
+      "case": "Webhook con firma invalida",
+      "expected": "401 y sin procesar",
+      "http_status": 401,
+      "passed": true,
+      "observation": "HMAC no coincide"
+    },
+    {
+      "case": "Webhook con timestamp expirado",
+      "expected": "401 y sin procesar",
+      "http_status": 401,
+      "passed": true,
+      "observation": "timestamp fuera de tolerancia"
+    },
+    {
+      "case": "Webhook firmado sin JWT",
+      "expected": "200 y procesamiento local",
+      "http_status": 200,
+      "passed": true,
+      "observation": "simulador ejecutado una vez"
+    },
+    {
+      "case": "Webhook firmado repetido",
+      "expected": "200 sin error",
+      "http_status": 200,
+      "passed": true,
+      "observation": "reintento aceptado; la deduplicacion real queda en el servicio"
+    }
+  ]
+}
