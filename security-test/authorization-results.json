@@ -1,0 +1,78 @@
+{
+  "timestamp_utc": "2026-11-18T17:13:00.290134+00:00",
+  "source_commit": "29e28d51d5f7df43f1f245cb2dbe76115b56b4a6",
+  "backend_image": "sha256:58d2dabe4d81802fe17ef744442abd0ef775dba7dd2ce086f1b6a667d4a18043",
+  "target": "http://127.0.0.1:9081",
+  "fixture_ids": [
+    5,
+    6,
+    7,
+    8
+  ],
+  "fixtures_cleaned": true,
+  "results": [
+    {
+      "case": "GET sin token",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "GET token invalido",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Listado de A",
+      "expected": "200 sin recursos de B",
+      "http_status": 200,
+      "passed": true,
+      "observation": "lista excluye fixtures de B"
+    },
+    {
+      "case": "A consulta tutoria de B",
+      "expected": "403/404 sin datos ajenos",
+      "http_status": 200,
+      "passed": false,
+      "observation": "recurso ajeno devuelto: True"
+    },
+    {
+      "case": "A modifica tutoria de B",
+      "expected": "403/404 y mensaje intacto",
+      "http_status": 200,
+      "passed": false,
+      "observation": "cambio ajeno confirmado en BD: True"
+    },
+    {
+      "case": "A borra tutoria de B",
+      "expected": "403/404 y fila conservada",
+      "http_status": 200,
+      "passed": false,
+      "observation": "borrado ajeno confirmado en BD: True"
+    },
+    {
+      "case": "B consulta su tutoria",
+      "expected": "200 con recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "B modifica su tutoria",
+      "expected": "200 y mensaje actualizado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario; no evalua transiciones de estado"
+    },
+    {
+      "case": "B borra su tutoria",
+      "expected": "200 y fila eliminada",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    }
+  ]
+}

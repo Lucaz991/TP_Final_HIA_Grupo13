@@ -2,7 +2,7 @@
 
 > **Informe histórico recuperado para H24/PT-33 el 18/11/2026.**
 > Origen: `feature/seguridad/escaneo-de-vulnerabilidades+evidencias`, commit `8e1a872`.
-> Los resultados de abajo corresponden al escaneo documentado del 09/11/2026,
+> Los resultados de la sección "Informe original" corresponden al 09/11/2026,
 > no a una nueva prueba ni al estado actual de las imágenes y servicios.
 > Esta recuperación incluye únicamente Markdown: los JSON y archivos de evidencia
 > citados deben localizarse en la rama de origen y revisarse antes de incorporarlos.
@@ -36,6 +36,77 @@ Las siguientes precisiones prevalecen sobre las conclusiones históricas:
   Revisar también versiones, fechas y digest de las demás imágenes.
 - “EOL” indica fin de soporte; no demuestra la causa del cierre de HAProxy.
   Diferenciar síntoma observado, mitigación aplicada y causa confirmada.
+
+## Validación actual H24 — 18/11/2026
+
+### H24-AUTH-01: acceso a tutorías de otro usuario (BOLA/IDOR)
+
+**Estado: abierto, confirmado en laboratorio; corrección pendiente.**
+**Severidad: alta. Prioridad: corregir antes de publicar esta versión.**
+Un usuario autenticado puede consultar, modificar y eliminar una tutoría ajena
+cambiando el ID de la URL. Afecta confidencialidad, integridad y disponibilidad
+de los registros. No es una inyección SQL ni requiere evadir la firma del JWT.
+
+**Alcance:** `http://127.0.0.1:9081`, proyecto `hia-security-test`, base
+`h24_security_test` PostgreSQL 18.6. Código base `29e28d5`; la imagen exacta y la
+hora UTC constan en la [evidencia JSON](security-test/authorization-results.json).
+Se usaron los alumnos ficticios A/B y cuatro tutorías descartables creadas para B.
+No se probó el dominio público ni se verificó qué versión está desplegada allí.
+
+| Caso | Esperado | Observado | Resultado |
+|---|---|---|---|
+| GET individual sin token | 401 | 401 | Conforme |
+| GET individual con token inválido | 401 | 401 | Conforme |
+| Listado de A | No incluir tutorías de B | No incluyó los recursos descartables de B | Conforme para el caso probado |
+| A consulta tutoría de B | 403/404 sin datos ajenos | 200 y datos de la tutoría ajena | **Falla** |
+| A modifica tutoría de B | 403/404 y mensaje intacto | 200; cambio confirmado por lectura de BD | **Falla** |
+| A elimina tutoría de B | 403/404 y fila conservada | 200; ausencia confirmada por lectura de BD | **Falla** |
+| B consulta su tutoría | 200 con su recurso | 200 con su recurso | Control positivo |
+| B modifica su tutoría | 200 y cambio persistido | 200; persistencia confirmada | Control positivo |
+| B elimina su tutoría | 200 y eliminación persistida | 200; eliminación confirmada | Control positivo |
+
+Las cuatro tutorías descartables se eliminaron al finalizar. Permanecen las
+cuatro tutorías del seed y cero filas con el prefijo de esta prueba.
+Los registros de auditoría sintéticos pueden permanecer para trazabilidad.
+La evidencia no incluye passwords, JWT ni cuerpos completos con datos de usuarios.
+
+**Causa verificada en código:** `backend/src/routes/tutoria.route.js` exige token,
+pero `getTutoria`, `editTutoria` y `deleteTutoria`, en
+`backend/src/controllers/tutoria.controller.js`, consultan/modifican por ID sin
+comprobar que `req.userId` corresponda al alumno o profesor autorizado.
+`getTutorias` sí filtra el listado por el usuario del JWT; esa protección no se
+aplica automáticamente a las rutas individuales.
+
+**Reproducción:** con el laboratorio cargado, ejecutar:
+
+```powershell
+python security-test/verify.py --authorization
+```
+
+El comando valida primero el aislamiento, obtiene tokens por login local, crea
+recursos descartables de B, ejecuta la matriz y limpia solo esos recursos.
+Termina con código **2** cuando encuentra incumplimientos y deja el JSON anterior.
+Las tres fallas son hallazgos esperados al reproducir esta versión, no errores
+del arranque del laboratorio. La prueba consume cuatro intentos de login contando
+la verificación previa; no ejecutarla repetidamente sin considerar el limitador.
+
+### Plan de acción para H24-AUTH-01
+
+| Paso | Acción | Criterio de cierre |
+|---|---|---|
+| Registro | MC conserva esta evidencia y coordina la corrección con backend | Hallazgo identificado, responsable de implementación acordado |
+| Evaluar exposición | Comparar el código de producción con la versión afectada, sin repetir borrados allí | Determinar si el defecto también está publicado |
+| Contención si está publicado | Restringir temporalmente las rutas afectadas o el acceso al servicio mientras se corrige, considerando el impacto funcional | Decisión y control documentados; no basta ocultar botones |
+| Corrección | Autorizar cada recurso en el backend con la identidad del JWT antes de leer, modificar, borrar o llamar a Calendar | A no puede operar sobre B; acceso legítimo conservado |
+| Evitar reasignación | Revisar los campos permitidos por rol; no aceptar libremente cambios de `alumnoId`/`profesorId` | El cliente no puede cambiar la propiedad para eludir el control |
+| Roles y estados | Definir operaciones permitidas al alumno/profesor y mantener la administración en rutas protegidas por rol | Reglas explícitas y pruebas para ambos participantes |
+| Verificación | Reconstruir solo backend H24 y repetir la misma prueba; agregar casos de profesor y campos restringidos al implementar el fix | Accesos ajenos rechazados, datos intactos, casos legítimos funcionales |
+| Despliegue y cierre | PR revisado, controles del pipeline y comprobación posterior al despliegue | Evidencia antes/después y estado actualizado; no cerrar solo por editar código |
+
+Estas medidas están **propuestas, no aplicadas**. No se detectó ni investigó una
+explotación real. El hallazgo no implica que haya ocurrido un incidente en
+producción. No se evaluaron aún otros endpoints, alta de tutorías, transiciones
+de estado, SQLi, XSS, proveedores externos o n8n.
 
 ## Informe original del 09/11/2026
 

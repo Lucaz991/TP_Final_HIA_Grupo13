@@ -1,8 +1,11 @@
 """Verificacion acotada del laboratorio; no es un escaneo de vulnerabilidades."""
 import json
+import argparse
+from datetime import datetime, timezone
 import socket
 import subprocess
 import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
@@ -25,14 +28,14 @@ def run(*args):
     return result.stdout.strip()
 
 
-def request(path, data=None, token=None):
+def request(path, data=None, token=None, method=None):
     headers = {}
     if data is not None:
         data = json.dumps(data).encode()
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = Request(BASE + path, data=data, headers=headers)
+    req = Request(BASE + path, data=data, headers=headers, method=method)
     try:
         response = HTTP.open(req, timeout=10)
     except HTTPError as error:
@@ -160,5 +163,154 @@ const assert = require('node:assert/strict');
     print("Laboratorio verificado. No se ejecutaron SQLi, ZAP ni pruebas completas de H24.")
 
 
+def authorization():
+    """Prueba acotada de propiedad; crea y elimina solo cuatro recursos marcados."""
+    tag = "H24-AUTH-" + uuid.uuid4().hex
+    results = []
+    ids = []
+
+    def fixtures(action):
+        script = """
+require('./security-test/guard.cjs')();
+const assert = require('node:assert/strict');
+const db = require('./config/database');
+const Usuario = require('./src/models/usuario.model');
+const Categoria = require('./src/models/categoria.model');
+const Tutoria = require('./src/models/tutoria.model');
+const { Op } = require('sequelize');
+const [action, tag, rawIds] = process.argv.slice(1);
+const ids = JSON.parse(rawIds);
+(async () => {
+  const [identity] = await db.query('SELECT current_database() AS name');
+  assert.equal(identity[0].name, 'h24_security_test');
+  let data;
+  if (action === 'create') {
+    const alumno = await Usuario.findOne({where:{email:'alumno.b@h24.test'}});
+    const profesor = await Usuario.findOne({where:{email:'profesor.b@h24.test'}});
+    const categoria = await Categoria.findOne({where:{nombre:'Matematica H24'}});
+    assert.ok(alumno && profesor && categoria);
+    data = await db.transaction(async transaction => {
+      const rows = [];
+      for (let n = 0; n < 4; n++) {
+        const row = await Tutoria.create({
+          alumnoId:alumno.id, profesorId:profesor.id, categoriaId:categoria.id,
+          fechaHora:'2026-11-23T15:00:00Z', modalidad:'virtual',
+          estado:'pendiente', precioAcordado:100, mensaje:tag+'-'+n
+        }, {transaction});
+        rows.push(row.id);
+      }
+      return rows;
+    });
+  } else {
+    const where = {id:{[Op.in]:ids}, mensaje:{[Op.like]:tag+'%'}};
+    if (action === 'cleanup') await Tutoria.destroy({where});
+    data = await Tutoria.findAll({
+      where:{id:{[Op.in]:ids}}, attributes:['id','mensaje'], raw:true
+    });
+  }
+  console.log('H24_RESULT='+JSON.stringify(data));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, action, tag, json.dumps(ids))
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
+    def record(case, expected, status, passed, observation):
+        results.append({
+            "case": case, "expected": expected, "http_status": status,
+            "passed": passed, "observation": observation,
+        })
+        print(f"{'PASS' if passed else 'FAIL'} {case}: HTTP {status}; {observation}")
+
+    secret = dict(
+        line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
+        if line and not line.startswith("#")
+    )["SECURITY_ACCOUNT_PASSWORD"]
+    tokens = {}
+    for account in ["alumno.a", "alumno.b"]:
+        status, _, body = request("/api/autenticacion/login", {
+            "email": account + "@h24.test", "password": secret
+        })
+        assert status == 200, "Login limitado; esperar 15 min o reiniciar solo backend H24"
+        login = json.loads(body)
+        assert login.get("status") == 1
+        tokens[account] = login["token"]
+    try:
+        ids = fixtures("create")
+        read_id, edit_id, delete_id, owner_id = ids
+        for name, token in [("sin token", None), ("token invalido", "h24-invalid")]:
+            status, _, _ = request(f"/api/tutoria/{read_id}", token=token)
+            record("GET " + name, "401", status, status == 401, "control de autenticacion")
+
+        status, _, body = request("/api/tutoria/", token=tokens["alumno.a"])
+        visible = {row["id"] for row in json.loads(body).get("data", [])}
+        record("Listado de A", "200 sin recursos de B", status,
+               status == 200 and not visible.intersection(ids),
+               "lista excluye fixtures de B" if not visible.intersection(ids) else "lista expone fixtures de B")
+
+        status, _, body = request(f"/api/tutoria/{read_id}", token=tokens["alumno.a"])
+        data = json.loads(body).get("data") or {}
+        exposed = data.get("id") == read_id
+        record("A consulta tutoria de B", "403/404 sin datos ajenos", status,
+               status in (403, 404) and not exposed,
+               f"recurso ajeno devuelto: {exposed}")
+
+        status, _, _ = request(f"/api/tutoria/{edit_id}", {
+            "mensaje": tag + "-modified-by-A"
+        }, tokens["alumno.a"], "PUT")
+        rows = {row["id"]: row["mensaje"] for row in fixtures("read")}
+        changed = rows.get(edit_id) == tag + "-modified-by-A"
+        record("A modifica tutoria de B", "403/404 y mensaje intacto", status,
+               status in (403, 404) and rows.get(edit_id) == tag + "-1",
+               f"cambio ajeno confirmado en BD: {changed}")
+
+        status, _, _ = request(f"/api/tutoria/{delete_id}",
+                               token=tokens["alumno.a"], method="DELETE")
+        remaining = {row["id"] for row in fixtures("read")}
+        record("A borra tutoria de B", "403/404 y fila conservada", status,
+               status in (403, 404) and delete_id in remaining,
+               f"borrado ajeno confirmado en BD: {delete_id not in remaining}")
+
+        status, _, body = request(f"/api/tutoria/{owner_id}", token=tokens["alumno.b"])
+        record("B consulta su tutoria", "200 con recurso propio", status,
+               status == 200 and (json.loads(body).get("data") or {}).get("id") == owner_id,
+               "control positivo del propietario")
+        status, _, _ = request(f"/api/tutoria/{owner_id}", {
+            "mensaje": tag + "-modified-by-owner"
+        }, tokens["alumno.b"], "PUT")
+        rows = {row["id"]: row["mensaje"] for row in fixtures("read")}
+        record("B modifica su tutoria", "200 y mensaje actualizado", status,
+               status == 200 and rows.get(owner_id) == tag + "-modified-by-owner",
+               "control positivo del propietario; no evalua transiciones de estado")
+        status, _, _ = request(f"/api/tutoria/{owner_id}",
+                               token=tokens["alumno.b"], method="DELETE")
+        remaining = {row["id"] for row in fixtures("read")}
+        record("B borra su tutoria", "200 y fila eliminada", status,
+               status == 200 and owner_id not in remaining, "control positivo del propietario")
+    finally:
+        if ids:
+            assert fixtures("cleanup") == [], "Revisar limpieza de los fixtures marcados"
+
+    backend_id = run(*COMPOSE, "ps", "-q", "backend")
+    image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
+    report = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "source_commit": run("git", "rev-parse", "HEAD"),
+        "backend_image": image_id, "target": BASE, "fixture_ids": ids,
+        "fixtures_cleaned": True, "results": results,
+    }
+    path = ROOT / "security-test" / "authorization-results.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("Evidencia sin credenciales: security-test/authorization-results.json")
+    return all(row["passed"] for row in results)
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--authorization", action="store_true",
+                        help="Tras verificar aislamiento, probar propiedad de tutorias descartables")
+    args = parser.parse_args()
     main()
+    if args.authorization and not authorization():
+        raise SystemExit(2)

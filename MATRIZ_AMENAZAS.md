@@ -15,6 +15,21 @@
 > compartida no equivale a segmentación. Verificar cada control en su contexto
 > antes de asignarle eficacia o marcarlo como implementado.
 
+## Validación actual H24 — 18/11/2026
+
+| ID | Amenaza | Evidencia actual | Impacto / prioridad | Control faltante | Estado |
+|---|---|---|---|---|---|
+| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Alumno A consultó, modificó y borró recursos descartables de B en H24 | Alto; corregir antes de publicar esta versión | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Abierto; sin corrección aplicada |
+
+El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
+ninguno de esos controles evitó el acceso individual a recursos ajenos.
+La explotación se confirmó solo en el laboratorio, no en producción.
+Ver [resultados y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026)
+y [evidencia](security-test/authorization-results.json).
+Las estimaciones y marcas históricas siguientes no reemplazan esta verificación.
+
+## Antecedente original
+
 **Responsable:** Matias (MC)
 **Fecha:** 4 de noviembre de 2026
 **Objetivo:** Identificar amenazas, evaluar riesgos y proponer controles de mitigación

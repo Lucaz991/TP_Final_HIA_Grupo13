@@ -87,6 +87,14 @@ debe documentarse por separado y con su alcance.
 - [ ] Verificar validación de entradas, errores, headers y límites de solicitudes.
 - [ ] Revisar secretos sin incorporar valores, tokens o contraseñas a los reportes.
 
+**Avance 18/11/2026:** ejecutada la prueba acotada de propiedad de tutorías con
+`python security-test/verify.py --authorization`. Nueve casos: seis conformes y
+tres fallas (lectura, modificación y borrado por otro alumno). Se creó
+**H24-AUTH-01**, severidad alta, abierto; ver el
+[informe actual y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026).
+Se limpiaron los recursos descartables. La revisión completa de autorización
+continúa pendiente: faltan corrección, retest y otros endpoints/roles.
+
 ### 4. Docker, infraestructura y CI/CD
 
 - [ ] Revisar interfaces publicadas, redes, usuarios, capacidades, privilegios,
