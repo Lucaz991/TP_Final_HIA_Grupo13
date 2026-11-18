@@ -1,7 +1,8 @@
 # H24 / PT-33 — Seguridad y respuesta ante incidentes
 
 **Responsable:** MC. **Punto del TP:** 14. **Inicio de revisión:** 18/11/2026.
-**Estado:** en preparación; criterios de aceptación todavía no cerrados.
+**Estado:** laboratorio aislado preparado y verificado; pruebas completas y
+criterios de aceptación todavía no cerrados.
 
 ## Objetivo y alcance
 
@@ -56,14 +57,23 @@ La rama recupera documentación de seguridad sin fusionar el código antiguo:
 
 ### 2. Entorno aislado
 
-- [ ] Preparar proyecto Compose de pruebas con red, volúmenes y puertos propios.
-- [ ] Usar cuentas, credenciales y datos sintéticos; evitar conexiones a las bases
+- [x] Preparar proyecto Compose de pruebas con red, volúmenes y puertos propios.
+- [x] Usar cuentas, credenciales y datos sintéticos; evitar conexiones a las bases
   locales del equipo o a la instalación publicada.
-- [ ] No conectar el túnel público del equipo a las pruebas.
-- [ ] Desactivar o sustituir por receptores locales los envíos de correo,
+- [x] No conectar el túnel público del equipo a las pruebas.
+- [x] Desactivar o sustituir por receptores locales los envíos de correo,
   Calendar, pagos, servicios de IA y webhooks externos.
-- [ ] Registrar inventario inicial, límites de ejecución y forma de eliminar
+- [x] Registrar inventario inicial, límites de ejecución y forma de eliminar
   exclusivamente el entorno de pruebas.
+
+Implementación: [Compose independiente](compose.security-test.yaml) y
+[guía reproducible del laboratorio](security-test/README.md).
+La verificación de preparación está en `security-test/verify.py`: incluye
+salud, redes, salida TCP bloqueada del backend, montajes, cuentas sintéticas
+y controles básicos 401/403/200. No equivale a completar las pruebas del apartado 3.
+Nginx tiene una red de entrada adicional; la red interna protege backend y base.
+La CSP local y los adaptadores de integración difieren de producción: no usar
+estos resultados para afirmar seguridad de Google, Mercado Pago, IA o CSP pública.
 
 `localhost` por sí solo no garantiza aislamiento. No ejecutar escaneos activos
 contra la instalación compartida. Un análisis pasivo de navegación pública
