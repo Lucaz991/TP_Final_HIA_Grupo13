@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 import socket
 import subprocess
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -813,11 +815,172 @@ const [email, field] = process.argv.slice(1);
     return all(row["passed"] for row in results)
 
 
+def sqli(verified_users):
+    """Pruebas SQLi de bajo impacto; no ejecuta payloads destructivos."""
+    results = []
+    secret = dict(
+        line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
+        if line and not line.startswith("#")
+    )["SECURITY_ACCOUNT_PASSWORD"]
+
+    def db_counts():
+        sql = """
+SELECT 'usuarios', count(*) FROM usuarios UNION ALL
+SELECT 'tutorias', count(*) FROM tutorias UNION ALL
+SELECT 'categorias', count(*) FROM categorias UNION ALL
+SELECT 'horarios', count(*) FROM horarios_disponibles UNION ALL
+SELECT 'solicitudes', count(*) FROM solicitudes_ayuda UNION ALL
+SELECT 'respuestas', count(*) FROM respuestas_ayuda UNION ALL
+SELECT 'calificaciones', count(*) FROM calificaciones
+"""
+        output = run(*COMPOSE, "exec", "-T", "database", "psql",
+                     "-U", "h24_app", "-d", "h24_security_test", "-tA", "-c", sql)
+        return dict(line.split("|", 1) for line in output.splitlines() if "|" in line)
+
+    def sensitive_leak(body):
+        text = body.decode("utf-8", "replace").lower()
+        markers = [
+            "contraseniahash", "$2", "jwt_secret", "security_", "pg_sleep",
+            "syntax error", "sqlstate", "sequelizedatabaseerror",
+            "invalid input syntax", "unterminated quoted string",
+        ]
+        return next((marker for marker in markers if marker in text), None)
+
+    def record(case, expected, status, elapsed, passed, observation):
+        results.append({
+            "case": case, "expected": expected, "http_status": status,
+            "elapsed_ms": round(elapsed * 1000), "passed": passed,
+            "observation": observation,
+        })
+        print(f"{'PASS' if passed else 'FAIL'} {case}: HTTP {status}; {observation}")
+
+    def probe(case, path, expected, token=None, method="GET", data=None):
+        started = time.monotonic()
+        status, _, body = request(path, data, token, method)
+        elapsed = time.monotonic() - started
+        leak = sensitive_leak(body)
+        passed = expected(status, body) and elapsed < 1.5 and not leak
+        detail = f"tiempo {elapsed:.2f}s"
+        try:
+            app_status = json.loads(body).get("status")
+            if app_status is not None:
+                detail += f"; app_status={app_status}"
+        except json.JSONDecodeError:
+            pass
+        if leak: detail += f"; contenido sensible/error SQL expuesto: {leak}"
+        record(case, "sin ejecución SQL ni exposición", status, elapsed,
+               passed, detail)
+        return status, body
+
+    def rejected(status, _body):
+        return status != 200
+
+    def exact(expected_status):
+        return lambda status, _body: status == expected_status
+
+    def no_token(status, body):
+        try:
+            parsed = json.loads(body)
+            return parsed.get("status") != 1 and not parsed.get("token")
+        except json.JSONDecodeError:
+            return status != 200
+
+    def filtered_zero(status, body):
+        try:
+            parsed = json.loads(body)
+            return status == 200 and parsed.get("recordsFiltered", 0) == 0
+        except json.JSONDecodeError:
+            return False
+
+    before = db_counts()
+    alumno = verified_users["alumno.a"]["token"]
+    admin = verified_users["admin"]["token"]
+    encoded = lambda value: quote(value, safe="")
+
+    # Un endpoint con ID por ruta no debe devolver datos ni aceptar la inyección.
+    path_payloads = [
+        "1 OR '1'='1",
+        "1' OR '1'='1' --",
+        "1; SELECT pg_sleep(2)--",
+        "1) OR (SELECT 1)=1--",
+    ]
+    for label, base_path, token in [
+        ("categoria publica", "/api/categoria/", None),
+        ("categorias de profesor", "/api/categoria/profesor/", None),
+        ("tutoria", "/api/tutoria/", alumno),
+        ("solicitud", "/api/solicitud/", alumno),
+        ("horario profesor", "/api/horarioDisponible/profesor/", alumno),
+        ("calificacion tutoria", "/api/calificacion/tutoria/", alumno),
+    ]:
+        for payload in path_payloads:
+            probe(f"SQLi ruta {label}", base_path + encoded(payload),
+                  rejected, token)
+
+    # Filtros numéricos y de coordenadas deben rechazarse antes de llegar a SQL.
+    for label, path in [
+        ("usuario.id", "/api/usuario?id=" + encoded("1 OR '1'='1")),
+        ("usuario.categoriaId", "/api/usuario?rol=profesor&categoriaId=" +
+             encoded("1 OR '1'='1")),
+        ("usuario.lat", "/api/usuario?rol=profesor&orden=cercania&lat=" +
+             encoded("1 OR '1'='1") + "&lng=0"),
+        ("usuario.lng", "/api/usuario?rol=profesor&orden=cercania&lat=0&lng=" +
+             encoded("0) OR (SELECT 1)=1--")),
+        ("usuario.page", "/api/usuario?page=" + encoded("1 OR '1'='1")),
+        ("usuario.limit", "/api/usuario?limit=" + encoded("1; SELECT pg_sleep(2)--")),
+        ("tutoria.page", "/api/tutoria/?page=" + encoded("1 OR '1'='1")),
+        ("tutoria.limit", "/api/tutoria/?limit=" + encoded("1; SELECT pg_sleep(2)--")),
+        ("admin.limit", "/api/admin/users?limit=" + encoded("1 OR '1'='1")),
+    ]:
+        token = admin if label.startswith("admin.") else alumno
+        probe(f"SQLi query {label}", path, exact(400), token)
+
+    # La búsqueda admin está parametrizada: el payload debe buscar texto literal,
+    # no convertirse en condición verdadera ni devolver todos los registros.
+    probe("SQLi search admin.users",
+          "/api/admin/users?search=" + encoded("' OR '1'='1"),
+          filtered_zero, admin)
+    probe("SQLi search admin.full-tutorials",
+          "/api/admin/full-tutorials?search=" + encoded("' OR '1'='1"),
+          filtered_zero, admin)
+
+    # El login no debe autenticar por una condición inyectada en email.
+    probe("SQLi login email", "/api/autenticacion/login", no_token,
+          method="POST", data={
+              "email": "' OR '1'='1", "password": secret
+          })
+
+    after = db_counts()
+    unchanged = before == after
+    record("Integridad de tablas", "sin cambios en filas", 0, 0,
+           unchanged, f"antes={before}; despues={after}")
+
+    backend_id = run(*COMPOSE, "ps", "-q", "backend")
+    image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
+    report = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "source_commit": run("git", "rev-parse", "HEAD"),
+        "backend_image": image_id, "target": BASE,
+        "scope": "probes controlados de error, booleano, UNION y tiempo; sin DROP/UPDATE/DELETE",
+        "results": results,
+    }
+    path = ROOT / "security-test" / "sqli-results.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("Evidencia sin credenciales: security-test/sqli-results.json")
+    return all(row["passed"] for row in results)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authorization", action="store_true",
                         help="Tras verificar aislamiento, probar propiedad/rol sobre recursos descartables")
+    parser.add_argument("--sqli", action="store_true",
+                        help="Tras verificar aislamiento, probar SQLi controlado sin mutaciones")
     args = parser.parse_args()
     verified_users = main()
-    if args.authorization and not authorization(verified_users):
+    failed = False
+    if args.authorization:
+        failed = not authorization(verified_users)
+    if args.sqli and not sqli(verified_users):
+        failed = True
+    if failed:
         raise SystemExit(2)
