@@ -7,6 +7,8 @@ module.exports = function assertTestEnvironment() {
     assert.equal(process.env.DB_NAME, 'h24_security_test');
     assert.equal(process.env.DB_USER, 'h24_app');
     assert.equal(process.env.FRONTEND_URL, 'http://localhost:9081');
+    assert.equal(process.env.MP_WEBHOOK_SECRET, 'h24-webhook-secret');
+    assert.equal(process.env.MERCADOPAGO_NOTIFICATION_URL, 'http://backend:3000/api/mercadopago/webhook');
     for (const name of ['DB_PASSWORD', 'JWT_SECRET']) {
         assert.match(process.env[name] || '', /^[a-f0-9]{64}$/, `Falta credencial de prueba: ${name}`);
     }

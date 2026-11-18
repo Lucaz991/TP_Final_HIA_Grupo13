@@ -122,7 +122,7 @@ export class RespuestaAyudaComponent implements OnInit {
     return;
   }
 
-  this.mercadoPagoService.crearPreferencia(respuesta.id, respuesta.precio).subscribe({
+  this.mercadoPagoService.crearPreferencia(respuesta.id, 'ayuda').subscribe({
 
     next: (result: any) => {
 

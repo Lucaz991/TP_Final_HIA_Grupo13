@@ -1,4 +1,6 @@
 """Verificacion acotada del laboratorio; no es un escaneo de vulnerabilidades."""
+import hashlib
+import hmac
 import json
 import argparse
 from datetime import datetime, timezone
@@ -30,8 +32,8 @@ def run(*args):
     return result.stdout.strip()
 
 
-def request(path, data=None, token=None, method=None):
-    headers = {}
+def request(path, data=None, token=None, method=None, extra_headers=None):
+    headers = dict(extra_headers or {})
     if data is not None:
         data = json.dumps(data).encode()
         headers["Content-Type"] = "application/json"
@@ -122,11 +124,12 @@ def main():
     status, _, body = request("/api/categoria/")
     assert status == 200 and b"Matematica H24" in body
     for path in [
-        "/api/mercadopago/webhook", "/api/mercadopago/crear-preferencia",
         "/api/chat/", "/api/autenticacion/loginGoogle", "/api/autenticacion/signUpGoogle",
     ]:
         assert request(path, {})[0] == 503
-    print("OK frontend/API; CSP local; Google, pagos, webhook e IA deshabilitados")
+    assert request("/api/mercadopago/webhook", {})[0] == 400
+    assert request("/api/mercadopago/crear-preferencia", {})[0] == 401
+    print("OK frontend/API; CSP local; Google e IA deshabilitados; Mercado Pago simulado")
 
     secret = dict(
         line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
@@ -158,8 +161,11 @@ const assert = require('node:assert/strict');
   assert.equal((await calendar.cancelarTutoria(event.idEvento)).exito, true);
   const payments = require('./src/services/mercadoPago.service');
   const ai = require('./src/services/ai.service');
-  await assert.rejects(payments.crearPreferencia(1), /deshabilitada/);
-  await assert.rejects(payments.procesarWebhook({}), /deshabilitada/);
+  const preference = await payments.crearPreferencia({
+    tipo: 'tutoria', entidad: {id: 'verify'}
+  });
+  assert.equal(preference.init_point, 'http://127.0.0.1:9081/pago-simulado?tipo=tutoria&id=verify');
+  assert.equal((await payments.procesarWebhook({data:{id:'verify'}})).processed, true);
   await assert.rejects(ai.getResponse('', ''), /deshabilitada/);
 })().catch(() => {process.exitCode = 1;});
 """)
@@ -969,18 +975,228 @@ SELECT 'calificaciones', count(*) FROM calificaciones
     return all(row["passed"] for row in results)
 
 
+def mercado_pago(verified_users):
+    """Prueba autorizacion y firma del webhook contra el simulador local."""
+    tag = "H24-MP-" + uuid.uuid4().hex
+    results = []
+
+    def record(case, expected, status, passed, observation):
+        results.append({
+            "case": case, "expected": expected, "http_status": status,
+            "passed": passed, "observation": observation,
+        })
+        print(f"{'PASS' if passed else 'FAIL'} {case}: HTTP {status}; {observation}")
+
+    def payment_fixture(action, fixture_ids=None):
+        fixture_ids = fixture_ids or {}
+        script = """
+require('./security-test/guard.cjs')();
+const assert = require('node:assert/strict');
+const db = require('./config/database');
+const Usuario = require('./src/models/usuario.model');
+const Categoria = require('./src/models/categoria.model');
+const Tutoria = require('./src/models/tutoria.model');
+const { SolicitudAyuda, RespuestaAyuda } =
+  require('./src/models/solicitudes/asociaciones.model');
+const { Op } = require('sequelize');
+const [action, rawIds, tag] = process.argv.slice(1);
+const ids = JSON.parse(rawIds);
+(async () => {
+  const [identity] = await db.query('SELECT current_database() AS name');
+  assert.equal(identity[0].name, 'h24_security_test');
+  let data = null;
+  if (action === 'create') {
+    const alumno = await Usuario.findOne({where:{email:'alumno.b@h24.test'}});
+    const profesor = await Usuario.findOne({where:{email:'profesor.a@h24.test'}});
+    const categoria = await Categoria.findOne({where:{nombre:'Matematica H24'}});
+    assert.ok(alumno && profesor && categoria);
+    const solicitud = await SolicitudAyuda.create({
+      usuarioId:alumno.id, categoriaId:categoria.id,
+      titulo:tag+'-solicitud', descripcion:tag
+    });
+    const respuesta = await RespuestaAyuda.create({
+      solicitudId:solicitud.id, usuarioId:profesor.id,
+      respuesta:tag+'-respuesta', precio:100, estado:'ACEPTADA'
+    });
+    const tutoria = await Tutoria.create({
+      alumnoId:alumno.id, profesorId:profesor.id, categoriaId:categoria.id,
+      fechaHora:'2026-11-24T15:00:00Z', modalidad:'virtual',
+      estado:'pendiente', precioAcordado:100, mensaje:tag+'-tutoria'
+    });
+    data = {solicitudId:solicitud.id, respuestaId:respuesta.id, tutoriaId:tutoria.id};
+  } else {
+    await RespuestaAyuda.destroy({where:{[Op.or]:[
+      {id:ids.respuestaId || 0}, {respuesta:{[Op.like]:tag+'%'}}
+    ]}});
+    await SolicitudAyuda.destroy({where:{[Op.or]:[
+      {id:ids.solicitudId || 0}, {titulo:{[Op.like]:tag+'%'}}
+    ]}});
+    await Tutoria.destroy({where:{mensaje:{[Op.like]:tag+'%'}}});
+    data = true;
+  }
+  console.log('H24_RESULT='+JSON.stringify(data));
+})().catch(() => {process.exitCode=1;}).finally(() => db.close());
+"""
+        output = run(*COMPOSE, "exec", "-T", "backend", "node", "-e",
+                     script, action, json.dumps(fixture_ids), tag)
+        return json.loads(next(line.removeprefix("H24_RESULT=")
+                               for line in output.splitlines() if line.startswith("H24_RESULT=")))
+
+    def audit_count():
+        output = run(*COMPOSE, "exec", "-T", "database", "psql",
+                     "-U", "h24_app", "-d", "h24_security_test", "-tA",
+                     "-c", "SELECT count(*) FROM auditorias WHERE accion='WEBHOOK_SIMULADO'")
+        return int(output.strip())
+
+    def audit_reached(expected):
+        for _ in range(20):
+            if audit_count() >= expected:
+                return True
+            time.sleep(0.1)
+        return False
+
+    def signed_headers(payment_id, timestamp=None):
+        timestamp = timestamp or int(time.time() * 1000)
+        request_id = "h24-request-1"
+        manifest = f"id:{str(payment_id).lower()};request-id:{request_id};ts:{timestamp};"
+        signature = hmac.new(
+            b"h24-webhook-secret", manifest.encode(), hashlib.sha256
+        ).hexdigest()
+        return {
+            "x-signature": f"ts={timestamp},v1={signature}",
+            "x-request-id": request_id,
+        }
+
+    secret = dict(
+        line.split("=", 1) for line in (ROOT / ".env.security-test").read_text().splitlines()
+        if line and not line.startswith("#")
+    )["SECURITY_ACCOUNT_PASSWORD"]
+    status, _, body = request("/api/autenticacion/login", {
+        "email": "alumno.b@h24.test", "password": secret
+    })
+    assert status == 200, "Login limitado; reiniciar solo backend H24"
+    login = json.loads(body)
+    assert login.get("status") == 1
+    token_b = login["token"]
+    token_a = verified_users["alumno.a"]["token"]
+
+    fixture_ids = {}
+    try:
+        fixture_ids = payment_fixture("create")
+        preferencias = [
+            ("Sin token crea preferencia", None, "ayuda",
+             fixture_ids["respuestaId"], 401),
+            ("A compra respuesta aceptada de B", token_a, "ayuda",
+             fixture_ids["respuestaId"], 403),
+            ("A compra tutoria de B", token_a, "tutoria",
+             fixture_ids["tutoriaId"], 403),
+            ("B compra respuesta aceptada", token_b, "ayuda",
+             fixture_ids["respuestaId"], 200),
+            ("B compra su tutoria", token_b, "tutoria",
+             fixture_ids["tutoriaId"], 200),
+            ("Tipo de pago invalido", token_b, "otro",
+             fixture_ids["tutoriaId"], 400),
+            ("ID de pago invalido", token_b, "tutoria", "1 OR 1", 400),
+        ]
+        for case, token, tipo, entity_id, expected in preferencias:
+            status, _, body = request("/api/mercadopago/crear-preferencia", {
+                "entidadId": entity_id, "tipo": tipo, "precio": 1
+            }, token)
+            init_point = ""
+            try:
+                init_point = json.loads(body).get("init_point", "")
+            except json.JSONDecodeError:
+                pass
+            passed = status == expected and (
+                expected != 200 or init_point.startswith("http://127.0.0.1:9081/pago-simulado")
+            )
+            record(case, f"{expected}; precio del cliente ignorado", status, passed,
+                   "simulador local" if status == 200 else "sin crear preferencia")
+
+        audit_before = audit_count()
+        webhook_path = "/api/mercadopago/webhook?data.id=12345"
+        webhook_body = {"type": "payment", "data": {"id": 12345}}
+        status, _, _ = request(webhook_path, webhook_body)
+        time.sleep(0.2)
+        record("Webhook sin firma", "400 y sin procesar", status,
+               status == 400 and audit_count() == audit_before,
+               "headers HMAC ausentes")
+
+        status, _, _ = request(webhook_path, webhook_body, extra_headers={
+            "x-signature": "v1=solo-firma", "x-request-id": "h24-request-1"
+        })
+        time.sleep(0.2)
+        record("Webhook con firma incompleta", "400 y sin procesar", status,
+               status == 400 and audit_count() == audit_before,
+               "falta timestamp en x-signature")
+
+        valid_headers = signed_headers(12345)
+        signature = valid_headers["x-signature"].split("v1=", 1)[1]
+        invalid_signature = ("0" if signature[0] != "0" else "1") + signature[1:]
+        status, _, _ = request(webhook_path, webhook_body, extra_headers={
+            "x-signature": valid_headers["x-signature"].split("v1=", 1)[0] +
+                           "v1=" + invalid_signature,
+            "x-request-id": "h24-request-1"
+        })
+        time.sleep(0.2)
+        record("Webhook con firma invalida", "401 y sin procesar", status,
+               status == 401 and audit_count() == audit_before,
+               "HMAC no coincide")
+
+        stale_ts = int((time.time() - 600) * 1000)
+        status, _, _ = request(webhook_path, webhook_body,
+                               extra_headers=signed_headers(12345, stale_ts))
+        time.sleep(0.2)
+        record("Webhook con timestamp expirado", "401 y sin procesar", status,
+               status == 401 and audit_count() == audit_before,
+               "timestamp fuera de tolerancia")
+
+        status, _, _ = request(webhook_path, webhook_body,
+                               extra_headers=signed_headers(12345))
+        record("Webhook firmado sin JWT", "200 y procesamiento local", status,
+               status == 200 and audit_reached(audit_before + 1),
+               "simulador ejecutado una vez")
+
+        status, _, _ = request(webhook_path, webhook_body,
+                               extra_headers=signed_headers(12345))
+        record("Webhook firmado repetido", "200 sin error", status,
+               status == 200 and audit_reached(audit_before + 2),
+               "reintento aceptado; la deduplicacion real queda en el servicio")
+    finally:
+        if fixture_ids:
+            payment_fixture("cleanup", fixture_ids)
+
+    backend_id = run(*COMPOSE, "ps", "-q", "backend")
+    image_id = run("docker", "inspect", "--format", "{{.Image}}", backend_id)
+    report = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "source_commit": run("git", "rev-parse", "HEAD"),
+        "backend_image": image_id, "target": BASE,
+        "scope": "autorizacion de preferencia y validacion HMAC local; sin llamadas a Mercado Pago",
+        "fixtures_cleaned": True, "results": results,
+    }
+    path = ROOT / "security-test" / "mercadopago-results.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("Evidencia sin credenciales: security-test/mercadopago-results.json")
+    return all(row["passed"] for row in results)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authorization", action="store_true",
                         help="Tras verificar aislamiento, probar propiedad/rol sobre recursos descartables")
     parser.add_argument("--sqli", action="store_true",
                         help="Tras verificar aislamiento, probar SQLi controlado sin mutaciones")
+    parser.add_argument("--mercadopago", action="store_true",
+                        help="Tras verificar aislamiento, probar preferencias y webhook simulados")
     args = parser.parse_args()
     verified_users = main()
     failed = False
     if args.authorization:
         failed = not authorization(verified_users)
     if args.sqli and not sqli(verified_users):
+        failed = True
+    if args.mercadopago and not mercado_pago(verified_users):
         failed = True
     if failed:
         raise SystemExit(2)

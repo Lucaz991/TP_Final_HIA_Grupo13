@@ -287,7 +287,7 @@ export class GestionTutoriaComponent implements OnInit {
       next: (res: any) => {
         const tutoriaId = res.data?.id || res.id;
 
-        this.mpService.crearPreferencia(tutoriaId).subscribe({
+        this.mpService.crearPreferencia(tutoriaId, 'tutoria').subscribe({
           next: (mpRes: any) => {
             Swal.fire({
               icon: 'success',

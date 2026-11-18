@@ -15,6 +15,8 @@ x-backend: &backend
     DB_PASSWORD: ${SECURITY_DB_PASSWORD:?Ejecutar security-test/init.ps1}
     JWT_SECRET: ${SECURITY_JWT_SECRET:?Ejecutar security-test/init.ps1}
     FRONTEND_URL: http://localhost:9081
+    MP_WEBHOOK_SECRET: h24-webhook-secret
+    MERCADOPAGO_NOTIFICATION_URL: http://backend:3000/api/mercadopago/webhook
   networks:
     - isolated
   security_opt:
@@ -27,7 +29,7 @@ x-backend: &backend
   volumes:
     - ./security-test:/app/security-test:ro
     - ./security-test/calendar.cjs:/app/src/services/google-calendar.service.js:ro
-    - ./security-test/disabled-integrations.cjs:/app/src/services/mercadoPago.service.js:ro
+    - ./security-test/mercadoPago.service.cjs:/app/src/services/mercadoPago.service.js:ro
     - ./security-test/disabled-integrations.cjs:/app/src/services/ai.service.js:ro
 
 services:
