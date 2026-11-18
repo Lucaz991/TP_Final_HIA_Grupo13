@@ -3,7 +3,7 @@ name: Continuous Deployment (Produccion)
 on:
   push:
     branches: [ "develop" ]
-
+# IMPORTANTE: Cambiar "develop" por "main" cuando definamos el pase a la versión final
 jobs:
   despliegue-automatico:
     name: Actualizar Servidor en Vivo
@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Actualizar y Desplegar
         run: |
-          cd "C:\Users\lucas\OneDrive\Desktop\APU2026 LUCAS\HIA2026\TP_Final_HIA_Grupo13"
+          # TODO: Reemplazar esta ruta por la carpeta del proyecto en la PC que haga de servidor el día de la defensa
+          cd "C:\Users\lucas\OneDrive\Desktop\APU2026 LUCAS\HIA2026\TP_Final_HIA_Grupo13" 
+          # TODO: Cambiar "develop" por "main" junto con la rama de arriba en la versión final
           git pull origin develop
           docker compose up -d --build
