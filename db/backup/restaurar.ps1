@@ -148,8 +148,22 @@ finally {
     $informe['segundos_totales'] =
         [math]::Round(((Get-Date) - $inicio).TotalSeconds, 3)
 
-    $informe | ConvertTo-Json |
-        Set-Content -LiteralPath $registro -Encoding UTF8
+    #$informe | ConvertTo-Json |
+        #Set-Content -LiteralPath $registro -Encoding UTF8
 
+    #Write-Host "Registro: $registro"
+
+    $jsonPayload = $informe | ConvertTo-Json
+    $jsonPayload | Set-Content -LiteralPath $registro -Encoding UTF8
     Write-Host "Registro: $registro"
+
+    # --- ENVIAR RESULTADO A N8N ---
+    $webhookUrl = "http://localhost:5678/webhook-test/backup-verificacion"
+    try {
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -ContentType "application/json; charset=utf-8" -Body $jsonPayload | Out-Null
+        Write-Host "Notificado a n8n correctamente."
+    }
+    catch {
+        Write-Warning "No se pudo notificar a n8n: $($_.Exception.Message)"
+    }
 }
