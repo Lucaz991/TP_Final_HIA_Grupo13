@@ -49,4 +49,7 @@ Por normativas de seguridad (DevSecOps) y para evitar la exposición de datos se
 - **Soporte:** soporte (Juan Perez)
 
 ---
-*Consulte la carpeta raíz para acceder a la documentación técnica detallada de cada módulo (Redes, Rollbacks, Configuración de Servidor).*
+*Consulte la carpeta raíz para acceder a la documentación técnica detallada de los demás módulos elaborados por el equipo, incluyendo:*
+* *Seguridad: Matriz de Amenazas, Escaneo de Vulnerabilidades y Gestión de Incidentes.*
+* *Base de Datos: Pruebas de Rendimiento, Optimización de Consultas (Dataset 6M) y Restauración de Backups.*
+* *Infraestructura: Configuración de Servidores, Túneles Cloudflare y Procedimientos de Rollback.*
