@@ -110,7 +110,11 @@ y revisión de errores de validación observados durante SQLi.
 - [ ] Inspeccionar permisos de Actions, secretos, dependencias de terceros y
   mecanismos de revisión/despliegue. Distinguir YAML de protecciones de rama
   configuradas en GitHub, que requieren verificación independiente.
-- [ ] Revisar configuración de publicación, confianza en proxy y Access.
+- [ ] Revisar configuración de publicación y confianza en proxy. Nota: Cloudflare
+  Access fue descartado por el grupo (cada servicio usa su propia
+  autenticación; `monitor.` reemplazado por `grafana.hia-26.com`, Prometheus
+  sin publicación). Verificar que las credenciales de cada panel sean fuertes
+  y únicas — son la única barrera ante acceso externo.
 - [ ] Revisar respaldo y recuperación como control ante incidentes; la
   replicación no sustituye un respaldo frente a borrados o corrupción lógica.
 

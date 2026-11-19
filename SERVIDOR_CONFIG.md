@@ -204,19 +204,26 @@ El servicio `cloudflared` del `compose.yaml` corre el túnel dentro de `redtpfin
 
    | Subdominio | Servicio interno |
    |------------|------------------|
-   | `app.<dominio>` | `http://app-frontend:80` |
+   | `tutorias.<dominio>` | `http://app-frontend:80` |
    | `glpi.<dominio>` | `http://glpi:80` |
    | `docs.<dominio>` | `http://nextcloud:80` |
    | `n8n.<dominio>` | `http://n8n:5678` |
-   | `monitor.<dominio>` | `http://prometheus:9090` |
+   | `grafana.<dominio>` | `http://grafana:3000` |
 
 5. `docker compose up -d cloudflared` → los subdominios quedan vivos con HTTPS gratis.
-6. Actualizar `.env`: `FRONTEND_URL=https://app.<dominio>` y recrear backend.
+6. Actualizar `.env`: `FRONTEND_URL=https://tutorias.<dominio>` y recrear backend.
 
-### Cloudflare Access (restricción por email)
+### Acceso a servicios administrativos (decisión del grupo, 19/11/2026)
 
-- **Access → Applications → Add** → Self-hosted → dominio `glpi.<dominio>` → Policy Allow → Include → Emails (los 5 del grupo).
-- Repetir para `docs.`, `n8n.`, `monitor.`. **`app.` queda público** (no se agrega).
+**No se implementó Cloudflare Access.** Cada servicio administrativo (GLPI,
+Nextcloud, n8n, Grafana) exige su propia cuenta; Prometheus no se publica y
+solo es alcanzable dentro de `redtpfinal` y a través de Grafana. Queda como
+riesgo aceptado en `MATRIZ_AMENAZAS.md`: sin una capa adicional en el borde,
+la seguridad de cada panel depende enteramente de la fortaleza de sus
+credenciales. Si se decidiera agregar Access más adelante:
+**Access → Applications → Add** → Self-hosted → dominio → Policy Allow →
+Include → Emails (los 5 del grupo), dejando `tutorias.` y el webhook de
+Mercado Pago públicos.
 
 ### Fallback sin dominio (Quick Tunnel temporal)
 

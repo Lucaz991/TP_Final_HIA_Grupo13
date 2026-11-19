@@ -264,7 +264,7 @@ a { color: var(--accent); }
     <article class="card">
       <h2>Defensa en capas</h2>
       <ol class="steps">
-        <li><strong>Borde:</strong> Cloudflare termina TLS, publica hostnames y aplica Access a GLPI, Nextcloud, n8n y monitoreo. La app queda pública; el webhook de Mercado Pago se autentica por firma HMAC, no por JWT.</li>
+        <li><strong>Borde:</strong> Cloudflare termina TLS y publica hostnames por túnel. La app queda pública; el webhook de Mercado Pago se autentica por firma HMAC, no por JWT. Los paneles administrativos se protegen con la autenticación propia de cada servicio (decisión del grupo, sin Cloudflare Access).</li>
         <li><strong>Frontend/Nginx:</strong> sirve Angular y actúa como proxy a `/api/`. En el laboratorio aplica una CSP local deliberadamente restrictiva.</li>
         <li><strong>Backend/API:</strong> JWT para sesión, rol para funciones administrativas, propiedad/participación para recursos, validación de entradas, rate limit de login y firma HMAC del webhook.</li>
         <li><strong>Datos:</strong> backend no habla directo con los nodos PostgreSQL; entra por HAProxy. Patroni + etcd administran el clúster y la replicación.</li>
@@ -277,10 +277,10 @@ a { color: var(--accent); }
         <thead><tr><th>Hostname</th><th>Destino interno</th><th>Acceso esperado</th></tr></thead>
         <tbody>
           <tr><td><code>tutorias.hia-26.com</code></td><td><code>app-frontend:80</code></td><td>Público; webhook MP público por firma</td></tr>
-          <tr><td><code>glpi.hia-26.com</code></td><td><code>glpi:80</code></td><td>Cloudflare Access: equipo</td></tr>
-          <tr><td><code>docs.hia-26.com</code></td><td><code>nextcloud:80</code></td><td>Cloudflare Access: equipo</td></tr>
-          <tr><td><code>n8n.hia-26.com</code></td><td><code>n8n:5678</code></td><td>Cloudflare Access: equipo</td></tr>
-          <tr><td><code>monitor.hia-26.com</code></td><td><code>prometheus:9090</code></td><td>Cloudflare Access: equipo</td></tr>
+          <tr><td><code>glpi.hia-26.com</code></td><td><code>glpi:80</code></td><td>Auth propia de GLPI</td></tr>
+          <tr><td><code>docs.hia-26.com</code></td><td><code>nextcloud:80</code></td><td>Auth propia de Nextcloud</td></tr>
+          <tr><td><code>n8n.hia-26.com</code></td><td><code>n8n:5678</code></td><td>Auth propia de n8n</td></tr>
+          <tr><td><code>grafana.hia-26.com</code></td><td><code>grafana:3000</code></td><td>Auth propia de Grafana</td></tr>
         </tbody>
       </table>
       <p class="callout">
@@ -331,7 +331,7 @@ a { color: var(--accent); }
       <article class="test pending">
         <h3>Producción</h3>
         <div class="score">Pendiente</div>
-        <small>No hay retest posterior a despliegue ni validación real de Cloudflare Access/Mercado Pago.</small>
+        <small>No hay retest posterior a despliegue ni validación real del webhook de Mercado Pago.</small>
       </article>
     </div>
   </section>
@@ -363,7 +363,7 @@ a { color: var(--accent); }
         </tr>
         <tr>
           <td>Después de integrar/desplegar la rama</td>
-          <td>Repetir las tres matrices + validación manual de dominio, TLS, Access y headers</td>
+          <td>Repetir las tres matrices + validación manual de dominio, TLS y headers</td>
           <td>Misma conducta en producción, con evidencia separada del laboratorio.</td>
         </tr>
       </tbody>
@@ -380,7 +380,7 @@ a { color: var(--accent); }
         <li>Gitleaks del historial y re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`.</li>
         <li>Revisión productiva de `latest`, `privileged`, montajes, recursos, redes y secretos.</li>
         <li>Permisos del workflow CI/CD, escaneos en pipeline y protecciones de rama en GitHub.</li>
-        <li>Prueba permitido/denegado de Cloudflare Access por servicio.</li>
+        <li>Revisar fortaleza de credenciales de GLPI/Nextcloud/n8n/Grafana: son la única barrera (Access descartado).</li>
         <li>Procedimiento de incidente, simulacro y restauración desde backup en base descartable.</li>
         <li>Chat/IA: evaluar la respuesta del modelo real frente a prompt injection directa y documentar el envío de PII a Groq.</li>
       </ul>
@@ -389,7 +389,7 @@ a { color: var(--accent); }
       <h2>Mensaje para explicar al equipo</h2>
       <ol class="steps">
         <li>Internet no entra directo al servidor: entra por Cloudflare y el túnel resuelve servicios internos.</li>
-        <li>Los puertos Docker quedan en localhost; GLPI, Nextcloud, n8n y monitor además pasan por Access.</li>
+        <li>Los puertos Docker quedan en localhost; GLPI, Nextcloud, n8n y Grafana piden su propia cuenta.</li>
         <li>La API no confía en el frontend: cada request pasa por JWT, rol y propiedad del recurso.</li>
         <li>Los pagos no confían en el body: el webhook exige firma y el backend consulta el estado real del pago.</li>
         <li>La base no queda expuesta: el backend usa HAProxy y el clúster Patroni/etcd queda en una red separada.</li>
@@ -418,19 +418,18 @@ const architectures = {
     nodes: [
       {id:'internet', x:25, y:82, w:130, h:64, type:'external', status:'partial', title:'Usuario / Internet', subtitle:'Navegador público', meta:'HTTPS hacia hia-26.com', details:'Entrada pública. No conecta directamente a los puertos Docker del host.', controls:['TLS en Cloudflare','DNS público','Sin exposición directa de backend/base']},
       {id:'mp', x:25, y:260, w:130, h:64, type:'external', status:'partial', title:'Mercado Pago', subtitle:'Webhook proveedor', meta:'POST /api/mercadopago/webhook', details:'Debe llegar públicamente al dominio de la app. No puede completar JWT ni Cloudflare Access.', controls:['x-signature + x-request-id','HMAC-SHA256','Timestamp ±5 minutos','Consulta posterior del pago real']},
-      {id:'cf', x:190, y:82, w:145, h:64, status:'partial', title:'Cloudflare', subtitle:'TLS + DNS + Access', meta:'Edge público', details:'Termina TLS, enruta hostnames y aplica Access en servicios administrativos.', controls:['TLS público','Access por email','Política separada del webhook']},
+      {id:'cf', x:190, y:82, w:145, h:64, status:'partial', title:'Cloudflare', subtitle:'TLS + DNS + Tunnel', meta:'Edge público', details:'Termina TLS y enruta hostnames. Sin Access: cada servicio administrativo valida con su propia cuenta.', controls:['TLS público','DDoS/edge protection','Webhook público']},
       {id:'tunnel', x:380, y:82, w:135, h:64, status:'partial', title:'cloudflared', subtitle:'Named Tunnel', meta:'Sin puerto entrante', details:'Conector saliente hacia Cloudflare. Puede tener réplicas; el público ve la máquina que responde.', controls:['TUNNEL_TOKEN en .env','No requiere abrir puertos WAN','Réplicas documentadas']},
       {id:'nginx', x:565, y:82, w:145, h:64, status:'active', title:'app-frontend', subtitle:'Angular + Nginx', meta:'Interno :80 · localhost :8081', details:'Sirve la SPA y reenvía /api al backend. En laboratorio usa otra CSP.', controls:['Proxy /api → backend','Headers web','cap_drop ALL + capacidades mínimas']},
       {id:'api', x:755, y:82, w:150, h:64, status:'active', title:'app-backend', subtitle:'Express API', meta:'Interno :3000 · localhost :3000', details:'Ejecuta autenticación, autorización por propietario/rol, validaciones y firma del webhook.', controls:['JWT','Rol admin','BOLA corregido en alcance probado','HMAC webhook','Rate limit login pendiente tras proxy']},
       {id:'proxy', x:950, y:82, w:130, h:64, status:'partial', title:'HAProxy', subtitle:'Alias postgres', meta:'localhost :5465 · stats :7000', details:'Punto único de entrada a PostgreSQL para el backend.', controls:['Health checks','Backend no conoce nodos','Puerto local solamente']},
       {id:'patroni', x:1090, y:70, w:90, h:88, status:'partial', title:'Patroni', subtitle:'node1-3 + etcd', meta:'PostgreSQL 18', details:'Clúster HA con replicación y etcd. La réplica no reemplaza backups.', controls:['Replicación','Failover','Backups/restauración pendientes de ensayo']},
-      {id:'access', x:380, y:230, w:135, h:64, status:'pending', title:'Access', subtitle:'Solo equipo', meta:'Emails autorizados', details:'Políticas para GLPI, Nextcloud, n8n y monitoreo. Falta prueba permitido/denegado.', controls:['Cloudflare Access','Emails allowlist','Validación pendiente']},
-      {id:'glpi', x:565, y:190, w:145, h:54, status:'pending', title:'GLPI', subtitle:'Tickets', meta:'Interno :80 · localhost :80', details:'Sistema de tickets para incidentes.', controls:['Dominio protegido por Access','Flujo de incidente pendiente']},
-      {id:'nextcloud', x:565, y:260, w:145, h:54, status:'pending', title:'Nextcloud', subtitle:'Documentación', meta:'Interno :80 · localhost :8082', details:'Repositorio documental del equipo.', controls:['Dominio protegido por Access','Credenciales por canal privado']},
-      {id:'n8n', x:565, y:330, w:145, h:54, status:'pending', title:'n8n', subtitle:'Automatización', meta:'Interno :5678 · localhost :5678', details:'Automatizaciones e integraciones de incidentes.', controls:['Dominio protegido por Access','Sandbox privilegiado pendiente de revisión']},
-      {id:'monitor', x:565, y:400, w:145, h:54, status:'pending', title:'Monitor público', subtitle:'Prometheus', meta:'monitor.hia-26.com', details:'Entrada web del monitoreo.', controls:['Dominio protegido por Access','Validación pendiente']},
-      {id:'prometheus', x:755, y:260, w:150, h:64, status:'partial', title:'Prometheus', subtitle:'Métricas', meta:'Interno :9090 · localhost :9090', details:'Recolecta métricas del stack.', controls:['Reglas de alerta','Access pendiente','Datos operativos']},
-      {id:'grafana', x:755, y:390, w:150, h:64, status:'pending', title:'Grafana', subtitle:'Dashboards', meta:'Interno :3000 · localhost :3001', details:'Visualización de métricas.', controls:['Credenciales débiles a revisar','Acceso/publicación pendiente']},
+      {id:'access', x:380, y:230, w:135, h:64, status:'partial', title:'Auth servicio', subtitle:'Cuentas propias', meta:'Sin Cloudflare Access', details:'Decisión del grupo: no hay capa de Access; GLPI, Nextcloud, n8n y Grafana exigen sus propias credenciales. La fortaleza de esas cuentas es la única barrera.', controls:['Login propio por servicio','Credenciales fuertes pendientes de revisión','Riesgo aceptado documentado']},
+      {id:'glpi', x:565, y:190, w:145, h:54, status:'partial', title:'GLPI', subtitle:'Tickets', meta:'Interno :80 · localhost :80', details:'Sistema de tickets para incidentes.', controls:['Auth propia de GLPI','Flujo de incidente pendiente']},
+      {id:'nextcloud', x:565, y:260, w:145, h:54, status:'partial', title:'Nextcloud', subtitle:'Documentación', meta:'Interno :80 · localhost :8082', details:'Repositorio documental del equipo.', controls:['Auth propia de Nextcloud','Credenciales por canal privado']},
+      {id:'n8n', x:565, y:330, w:145, h:54, status:'partial', title:'n8n', subtitle:'Automatización', meta:'Interno :5678 · localhost :5678', details:'Automatizaciones e integraciones de incidentes.', controls:['Auth propia de n8n','Sandbox privilegiado pendiente de revisión']},
+      {id:'monitor', x:565, y:400, w:145, h:54, status:'partial', title:'Grafana', subtitle:'grafana.hia-26.com', meta:'Interno :3000 · localhost :3001', details:'Único panel de monitoreo publicado; Prometheus queda interno.', controls:['Auth propia de Grafana','Credenciales débiles a revisar']},
+      {id:'prometheus', x:755, y:260, w:150, h:64, status:'partial', title:'Prometheus', subtitle:'Métricas', meta:'Interno :9090 · localhost :9090 · sin publicación', details:'Recolecta métricas del stack. No se publica por dominio: solo es alcanzable dentro de redtpfinal y a través de Grafana.', controls:['Reglas de alerta','Sin hostname público','Datos operativos']},
       {id:'exporters', x:950, y:390, w:130, h:64, status:'partial', title:'Exporters', subtitle:'postgres + cAdvisor', meta:'Métricas internas', details:'Exponen métricas de nodos PostgreSQL y contenedores.', controls:['Solo red interna','Imágenes latest pendientes']},
       {id:'alertmanager', x:950, y:260, w:130, h:64, status:'pending', title:'Alertmanager', subtitle:'Alertas', meta:'Interno :9093 · localhost :9093', details:'Gestiona alertas generadas por Prometheus.', controls:['Integración a revisar','Flujo n8n/GLPI pendiente']},
       {id:'backup', x:1090, y:270, w:90, h:64, status:'pending', title:'Backup', subtitle:'postgres:18', meta:'Servicio interno', details:'Espacio para ejecutar respaldos. Falta evidencia de restauración.', controls:['Restauración descartable pendiente','Réplica ≠ backup']}
@@ -438,7 +437,7 @@ const architectures = {
     edges: [
       ['internet','cf','HTTPS'],['cf','tunnel','tunnel'],['tunnel','nginx','app'],
       ['nginx','api','/api'],['api','proxy','SQL'],['proxy','patroni','5432'],
-      ['mp','cf','POST'],['cf','access','policy'],['access','glpi','glpi'],
+      ['mp','cf','POST'],['tunnel','access','route'],['access','glpi','glpi'],
       ['access','nextcloud','docs'],['access','n8n','n8n'],['access','monitor','metrics'],
       ['patroni','exporters','metrics'],['exporters','prometheus','scrape'],
       ['api','prometheus','metrics'],['prometheus','alertmanager','alerts'],
@@ -452,10 +451,10 @@ const architectures = {
         steps:['El usuario entra por HTTPS al dominio público.','Cloudflare termina TLS y entrega al named tunnel.','cloudflared resuelve app-frontend dentro de Docker.','Nginx sirve Angular y envía /api al backend.','Backend valida JWT, rol y propiedad antes de consultar datos.','Backend entra a PostgreSQL solo por HAProxy.']
       },
       access: {
-        label:'Equipo → Access',
-        nodes:['internet','cf','access','glpi','nextcloud','n8n','monitor'],
-        edges:[['internet','cf'],['cf','access'],['access','glpi'],['access','nextcloud'],['access','n8n'],['access','monitor']],
-        steps:['El integrante abre un hostname administrativo.','Cloudflare Access evalúa email autorizado.','Solo si pasa Access llega a GLPI, Nextcloud, n8n o monitor.','Falta evidencia permitido/denegado por cada servicio.']
+        label:'Equipo → paneles',
+        nodes:['internet','cf','tunnel','access','glpi','nextcloud','n8n','monitor'],
+        edges:[['internet','cf'],['cf','tunnel'],['tunnel','access'],['access','glpi'],['access','nextcloud'],['access','n8n'],['access','monitor']],
+        steps:['El integrante abre un hostname administrativo.','Cloudflare termina TLS y el túnel entrega al servicio interno.','Cada panel exige su propia cuenta: GLPI, Nextcloud, n8n y Grafana.','No hay capa de Access: la fortaleza de esas credenciales es la barrera (riesgo aceptado).']
       },
       payment: {
         label:'Webhook pago',
@@ -465,7 +464,7 @@ const architectures = {
       },
       observe: {
         label:'Métricas/alertas',
-        nodes:['api','patroni','exporters','prometheus','grafana','alertmanager','n8n'],
+        nodes:['api','patroni','exporters','prometheus','monitor','alertmanager','n8n'],
         edges:[['api','prometheus'],['patroni','exporters'],['exporters','prometheus'],['prometheus','alertmanager'],['alertmanager','n8n']],
         steps:['Los exporters publican métricas internas.','Prometheus recolecta y evalúa reglas.','Alertmanager agrupa alertas.','n8n debería convertir eventos en tickets/notificación; el flujo sigue pendiente.']
       }

@@ -31,10 +31,17 @@ funcionan igual en cualquier máquina que corra el mismo `compose.yaml`.
 | Subdominio | Destino interno | Acceso |
 |---|---|---|
 | `tutorias.hia-26.com` | `http://app-frontend:80` | Público |
-| `glpi.hia-26.com` | `http://glpi:80` | Cloudflare Access (solo equipo) |
-| `docs.hia-26.com` | `http://nextcloud:80` | Cloudflare Access (solo equipo) |
-| `n8n.hia-26.com` | `http://n8n:5678` | Cloudflare Access (solo equipo) |
-| `monitor.hia-26.com` | `http://prometheus:9090` | Cloudflare Access (solo equipo) |
+| `glpi.hia-26.com` | `http://glpi:80` | Autenticación propia de GLPI |
+| `docs.hia-26.com` | `http://nextcloud:80` | Autenticación propia de Nextcloud |
+| `n8n.hia-26.com` | `http://n8n:5678` | Autenticación propia de n8n |
+| `grafana.hia-26.com` | `http://grafana:3000` | Autenticación propia de Grafana |
+
+> **Decisión de diseño (19/11/2026):** no se implementó Cloudflare Access.
+> El equipo lo consideró redundante porque cada servicio administrativo
+> ya exige su propia cuenta. Prometheus **no se publica**: solo es accesible
+> dentro de `redtpfinal` y mediante Grafana. Queda registrado como riesgo
+> aceptado en `MATRIZ_AMENAZAS.md`: si se quisiera defensa en profundidad
+> en el borde, Access puede agregarse sin tocar la aplicación.
 
 ## Prerequisitos
 
