@@ -87,7 +87,10 @@ produccion. Las diferencias de ejecucion son:
   webhook en auditoria. El controlador y la validacion HMAC son los del backend
   real; no se usa `MP_ACCESS_TOKEN` ni se contacta al proveedor.
 - El adaptador de IA se sustituye por una funcion que rechaza la operacion si
-  se llama directamente al backend.
+  se llama directamente al backend. Nginx devuelve 503 para `/api/chat` desde
+  el exterior; dentro del contenedor el backend si responde y los controles
+  del endpoint (401/400/429/contexto por usuario) se verificaron con
+  `docker exec`, ver H24-IA-01 en `INFORME_VULNERABILIDADES.md`.
 - `start.cjs` rechaza variables de proveedores y exige los nombres/credenciales
   de prueba antes de iniciar la aplicacion. No se incluyen claves de Google,
   Mercado Pago, IA ni correo. En el codigo revisado, las invitaciones por correo

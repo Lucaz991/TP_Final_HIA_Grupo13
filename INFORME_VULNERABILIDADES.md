@@ -281,6 +281,57 @@ autorización del pagador y la lógica HMAC del backend contra un cliente
 simulado; falta validar el secreto real y una notificación real en el ambiente
 publicado.
 
+### H24-IA-01: chatbot con datos ajenos, sin límites y con inyección indirecta
+
+**Estado: corregido en rama de fix y verificado en el backend del laboratorio;
+la respuesta real del proveedor sigue sin evaluarse.**
+**Severidad: alta.** La revisión del asistente (`POST /api/chat`, Groq)
+encontró tres defectos:
+
+- **Datos ajenos en el contexto:** `context.service.js` cargaba hasta 10
+  tutorías con nombre y apellido de alumno y profesor sin filtrar por el
+  usuario que preguntaba. La API ya restringía tutorías por participante,
+  pero el chatbot consultaba la base directamente: un atajo que anulaba la
+  autorización por propietario para cualquier usuario autenticado.
+- **Sin límites:** no existía rate limit ni límite de longitud del mensaje.
+  Un usuario autenticado podía agotar la cuota del proveedor (denegación de
+  servicio del chat para todos) y cada mensaje disparaba hasta cuatro
+  consultas con JOIN a la base.
+- **Prompt injection indirecta:** el `comentario` libre de las calificaciones
+  se insertaba en el *system prompt* de otros usuarios; un comentario
+  malicioso podía alterar las respuestas del asistente. El mensaje del
+  usuario también va sin filtros al rol `user` (inyección directa mitigada
+  solo por el texto del prompt).
+
+**Corrección verificada:**
+
+- Las tutorías del contexto quedan limitadas a `alumnoId`/`profesorId` del
+  usuario autenticado; sin `userId` no se incluye ninguna.
+- Se eliminó `comentario` de las calificaciones del contexto y se limitó el
+  listado de profesores a 50.
+- Nuevo limitador `chatIntentos`: **20 mensajes por usuario cada 15
+  minutos**, clave por `req.userId` (no por IP, así no agrupa usuarios detrás
+  del proxy). `verifyToken` se ejecuta antes del limitador.
+- El mensaje exige `string` no vacío y máximo **1000 caracteres**; se recorta
+  antes de usarlo. El cliente Groq tiene timeout de 15 s.
+
+Prueba ejecutada dentro del contenedor del laboratorio (`docker exec`), porque
+Nginx del entorno sigue devolviendo 503 para `/api/chat` desde el exterior:
+
+- Sin token → **401**; mensaje vacío, no string o de 1001 caracteres → **400**.
+- Mensaje válido → **500** del adaptador deshabilitado (llega al servicio y no
+  llama al proveedor).
+- 429 exactamente en la request **21** del mismo usuario.
+- `buildContext` como `alumno.a` no incluye una tutoría de `alumno.b`; como
+  `alumno.b` sí la incluye; sin `userId` no incluye ninguna.
+
+**Límites y riesgo residual:** el laboratorio reemplaza `ai.service.js`, así
+que no se evaluó la respuesta del modelo real ni su resistencia a prompt
+injection. Quedan como superficie aceptada los campos de perfil del profesor
+(ubicación, universidad, carrera) que viajan al proveedor y el envío de PII a
+Groq como subprocesador; documentarlo en la matriz. El frontend escapa la
+respuesta (`{{ msg.text }}`), sin XSS por salida del modelo.
+
 ### Retest integrado 18/11/2026
 
 `python security-test/verify.py --authorization` pasó **62/62** casos sobre el
