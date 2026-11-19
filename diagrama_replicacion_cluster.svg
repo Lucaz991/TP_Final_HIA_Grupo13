@@ -1,0 +1,345 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1340 980" width="1340" height="980" style="background:#ffffff; font-family:Arial, Helvetica, sans-serif;">
+  <defs>
+    <!-- Marcadores de flechas estandar draw.io -->
+    <marker id="arrow-navy" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#1e3a8a"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#d97706"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- ================= ENCABEZADO SUPERIOR ================= -->
+  <text x="30" y="38" font-size="18" font-weight="700" fill="#0f172a" letter-spacing="0.2">Arquitectura de Alta Disponibilidad, Replicación y Monitoreo</text>
+  <text x="30" y="58" font-size="12" fill="#64748b">Clúster PostgreSQL con Patroni (3 nodos), DCS etcd, balanceador HAProxy y observabilidad en tiempo real (Prometheus / Grafana)</text>
+
+  <!-- ========================================================================= -->
+  <!-- SECCION SUPERIOR: CAPA DE APLICACIÓN + REDES + CLÚSTER (y=80 a y=520)    -->
+  <!-- ========================================================================= -->
+
+  <!-- 1. CAPA DE APLICACIÓN Y CLIENTES -->
+  <g id="capa-clientes">
+    <rect x="25" y="80" width="220" height="435" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="135" y="105" font-size="11" font-weight="700" fill="#1e3a8a" text-anchor="middle" letter-spacing="0.5">CLIENTES Y SERVICIOS</text>
+    <line x1="45" y1="115" x2="225" y2="115" stroke="#e2e8f0" stroke-width="1"/>
+
+    <!-- Backend API -->
+    <text x="42" y="140" font-size="11" font-weight="700" fill="#0f172a">API Backend (Node.js)</text>
+    <text x="42" y="158" font-size="9" fill="#334155">• Servidor Express y endpoints REST</text>
+    <text x="42" y="174" font-size="9" fill="#334155">• ORM Sequelize con driver pg</text>
+    <text x="42" y="190" font-size="9" fill="#334155">• Host de conexión: 'postgres:5432'</text>
+    <text x="42" y="206" font-size="9" fill="#334155">• Base de datos transaccional: tpFinal</text>
+    <text x="42" y="222" font-size="9" fill="#0284c7">• Conectado a la red general (redtpfinal)</text>
+    <text x="42" y="242" font-size="8.5" fill="#64748b">No interactúa con IPs directas de nodos</text>
+    <text x="42" y="257" font-size="8.5" fill="#64748b">Tolerante a caídas y cambios de líder</text>
+
+    <line x1="42" y1="280" x2="228" y2="280" stroke="#e2e8f0" stroke-width="1"/>
+
+    <!-- pgAdmin 4 -->
+    <text x="42" y="310" font-size="11" font-weight="700" fill="#0f172a">pgAdmin 4</text>
+    <text x="42" y="328" font-size="9" fill="#334155">• Panel web en localhost:5050</text>
+    <text x="42" y="344" font-size="9" fill="#334155">• Conexión administrativa a postgres:5432</text>
+    <text x="42" y="360" font-size="9" fill="#0284c7">• Conectado a la red general (redtpfinal)</text>
+    <text x="42" y="376" font-size="9" fill="#334155">• Inspección de esquemas y dataset (6M)</text>
+    <text x="42" y="392" font-size="9" fill="#334155">• Monitoreo de consultas y bloqueos</text>
+    <text x="42" y="414" font-size="8.5" fill="#64748b">Credenciales seguras vía variables de entorno</text>
+  </g>
+
+  <!-- 2. HAPROXY (BALANCER & GATEWAY DE BASE DE DATOS) -->
+  <g id="haproxy-gateway">
+    <rect x="270" y="80" width="185" height="435" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.2"/>
+    <text x="362" y="105" font-size="11" font-weight="700" fill="#15803d" text-anchor="middle" letter-spacing="0.5">BALANCEADOR HAPROXY</text>
+    <line x1="290" y1="115" x2="435" y2="115" stroke="#bbf7d0" stroke-width="1"/>
+
+    <text x="288" y="140" font-size="10" font-weight="700" fill="#166534">Puente entre Redes:</text>
+    <text x="288" y="158" font-size="8.5" fill="#0284c7">• Alias 'postgres' en red general</text>
+    <text x="288" y="174" font-size="8.5" fill="#1e3a8a">• Interfaz en la red privada de BD</text>
+    <text x="288" y="190" font-size="8.5" fill="#475569">• Aísla los nodos de accesos directos</text>
+
+    <line x1="288" y1="210" x2="435" y2="210" stroke="#bbf7d0" stroke-width="1"/>
+
+    <text x="288" y="232" font-size="10" font-weight="700" fill="#0f172a">Puertos de escucha:</text>
+    <text x="288" y="249" font-size="8.5" fill="#334155">• :5432 (Tráfico interno Docker)</text>
+    <text x="288" y="265" font-size="8.5" fill="#334155">• :5465 (Acceso desde Windows)</text>
+    <text x="288" y="281" font-size="8.5" fill="#334155">• :7000 (Panel web de estadísticas)</text>
+
+    <line x1="288" y1="298" x2="435" y2="298" stroke="#bbf7d0" stroke-width="1"/>
+
+    <text x="288" y="320" font-size="10" font-weight="700" fill="#15803d">Verificación de Salud:</text>
+    <text x="288" y="337" font-size="8.5" fill="#334155">• Consulta HTTP al puerto 8000 (Patroni)</text>
+    <text x="288" y="353" font-size="8.5" fill="#334155">• Si devuelve 200 OK → Enruta como Líder</text>
+    <text x="288" y="369" font-size="8.5" fill="#334155">• Si devuelve 503 → Nodo Standby</text>
+    <text x="288" y="390" font-size="8.5" font-weight="600" fill="#15803d">• Conmutación automática en menos de 3s</text>
+    <text x="288" y="406" font-size="8.5" fill="#64748b">Cero cambios manuales en la aplicación</text>
+  </g>
+
+  <!-- Flechas Clientes -> HAProxy -->
+  <line x1="245" y1="205" x2="270" y2="205" stroke="#1e3a8a" stroke-width="1.8" marker-end="url(#arrow-navy)"/>
+  <line x1="245" y1="365" x2="270" y2="365" stroke="#475569" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-slate)"/>
+
+  <!-- Enlace HAProxy -> Leader (Texto directo sobre la flecha, sin caja artificial) -->
+  <line x1="455" y1="260" x2="520" y2="260" stroke="#15803d" stroke-width="2.2" marker-end="url(#arrow-emerald)"/>
+  <text x="487" y="252" font-size="8.5" font-weight="700" fill="#15803d" text-anchor="middle">Lectura / Escritura</text>
+
+  <!-- 3. CLÚSTER PATRONI -->
+  <g id="cluster-patroni">
+    <rect x="520" y="80" width="795" height="435" rx="6" fill="#f8fafc" stroke="#93c5fd" stroke-width="1.4"/>
+    <text x="917" y="105" font-size="11" font-weight="700" fill="#1e3a8a" text-anchor="middle" letter-spacing="0.5">CLÚSTER POSTGRESQL (RED PRIVADA: red-patroni)</text>
+    <line x1="540" y1="115" x2="1295" y2="115" stroke="#bfdbfe" stroke-width="1"/>
+
+    <!-- DCS: etcd (integrado fluidamente sin caja estridente) -->
+    <text x="548" y="138" font-size="10.5" font-weight="700" fill="#b45309">Consenso Distribuido (etcd v3.5 en puerto :2379):</text>
+    <text x="548" y="155" font-size="8.5" fill="#475569">Mantiene el bloqueo del Líder con TTL de 30 segundos • Elección automática de Líder por consenso • Heartbeat de nodos cada 10s</text>
+    <line x1="548" y1="168" x2="1295" y2="168" stroke="#e2e8f0" stroke-width="1"/>
+
+    <!-- NODO 1: LÍDER -->
+    <rect x="535" y="180" width="242" height="320" rx="6" fill="#ffffff" stroke="#3b82f6" stroke-width="1.6"/>
+    <text x="656" y="204" font-size="11.5" font-weight="700" fill="#1d4ed8" text-anchor="middle">Nodo 1 (Líder Actual)</text>
+    <line x1="550" y1="214" x2="762" y2="214" stroke="#dbeafe" stroke-width="1"/>
+
+    <text x="548" y="235" font-size="9.5" font-weight="700" fill="#1e40af">Rol Patroni: Líder (Timeline 4)</text>
+    <text x="548" y="251" font-size="9" fill="#059669">Estado: Activo • Permite Escritura y Lectura</text>
+    <text x="548" y="270" font-size="8.5" fill="#334155">• Motor PostgreSQL en puerto :5432</text>
+    <text x="548" y="286" font-size="8.5" fill="#334155">• Daemon Patroni en puerto :8000</text>
+    <text x="548" y="302" font-size="8.5" fill="#334155">• Base de datos 'tpFinal' (Dataset 6M)</text>
+    <text x="548" y="318" font-size="8.5" fill="#334155">• Emisión continua de registros WAL</text>
+
+    <line x1="548" y1="334" x2="762" y2="334" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="548" y="352" font-size="9" font-weight="700" fill="#1d4ed8">Replicación y Parámetros:</text>
+    <text x="548" y="369" font-size="8.5" fill="#475569">• Slots de replicación activos hacia nodo 2 y nodo 3</text>
+    <text x="548" y="384" font-size="8.5" fill="#475569">• wal_keep_size = 512MB • max_connections = 500</text>
+    <text x="548" y="399" font-size="8.5" fill="#475569">• use_pg_rewind = true para auto-sincronización</text>
+
+    <line x1="548" y1="416" x2="762" y2="416" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="548" y="434" font-size="8.5" font-weight="700" fill="#0f172a">Volumen de datos:</text>
+    <text x="548" y="450" font-size="8" fill="#64748b">node1_data:/var/lib/postgresql/data</text>
+    <text x="548" y="470" font-size="8.5" font-weight="600" fill="#059669">Respuesta HAProxy: HTTP 200 OK</text>
+    <text x="548" y="488" font-size="8" fill="#2563eb">Heartbeat activo hacia etcd:2379</text>
+
+    <!-- NODO 2: RÉPLICA -->
+    <rect x="797" y="180" width="242" height="320" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="918" y="204" font-size="11.5" font-weight="700" fill="#334155" text-anchor="middle">Nodo 2 (Réplica Standby)</text>
+    <line x1="812" y1="214" x2="1024" y2="214" stroke="#f1f5f9" stroke-width="1"/>
+
+    <text x="810" y="235" font-size="9.5" font-weight="700" fill="#334155">Rol Patroni: Réplica Streaming</text>
+    <text x="810" y="251" font-size="9" fill="#0f172a">Estado: Running • Modo Solo Lectura</text>
+    <text x="810" y="270" font-size="8.5" fill="#334155">• Conectado al Líder mediante replication slot</text>
+    <text x="810" y="286" font-size="8.5" fill="#334155">• Retraso de replicación: 0 bytes (en tiempo real)</text>
+    <text x="810" y="302" font-size="8.5" fill="#334155">• API de estado Patroni en puerto :8000</text>
+    <text x="810" y="318" font-size="8.5" fill="#334155">• Auto-recuperación habilitada con pg_rewind</text>
+
+    <line x1="810" y1="334" x2="1024" y2="334" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="810" y="352" font-size="9" font-weight="700" fill="#334155">Configuración Standby:</text>
+    <text x="810" y="369" font-size="8.5" fill="#475569">• hot_standby = on • primary_conninfo activa</text>
+    <text x="810" y="384" font-size="8.5" fill="#475569">• Señal standby.signal controlada por Patroni</text>
+    <text x="810" y="399" font-size="8.5" fill="#475569">• Candidato automático a tomar el liderazgo</text>
+
+    <line x1="810" y1="416" x2="1024" y2="416" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="810" y="434" font-size="8.5" font-weight="700" fill="#0f172a">Volumen de datos:</text>
+    <text x="810" y="450" font-size="8" fill="#64748b">node2_data:/var/lib/postgresql/data</text>
+    <text x="810" y="470" font-size="8.5" font-weight="600" fill="#64748b">Respuesta HAProxy: HTTP 503 (Standby)</text>
+    <text x="810" y="488" font-size="8" fill="#059669">Sincronización fluida con el Líder</text>
+
+    <!-- NODO 3: RÉPLICA (PRUEBAS DE RESILIENCIA) -->
+    <rect x="1058" y="180" width="242" height="320" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="1179" y="204" font-size="11.5" font-weight="700" fill="#334155" text-anchor="middle">Nodo 3 (Réplica Standby)</text>
+    <line x1="1073" y1="214" x2="1285" y2="214" stroke="#f1f5f9" stroke-width="1"/>
+
+    <text x="1071" y="235" font-size="9.5" font-weight="700" fill="#334155">Rol Patroni: Réplica Streaming</text>
+    <text x="1071" y="251" font-size="9" fill="#0f172a">Estado: Running • Modo Solo Lectura</text>
+    <text x="1071" y="270" font-size="8.5" fill="#334155">• Conectado al Líder mediante replication slot</text>
+    <text x="1071" y="286" font-size="8.5" fill="#334155">• Retraso de replicación: 0 bytes (en tiempo real)</text>
+    <text x="1071" y="302" font-size="8.5" fill="#334155">• API de estado Patroni en puerto :8000</text>
+    <text x="1071" y="318" font-size="8.5" fill="#334155">• Auto-recuperación habilitada con pg_rewind</text>
+
+    <line x1="1071" y1="334" x2="1285" y2="334" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="1071" y="352" font-size="9" font-weight="700" fill="#b91c1c">Prueba de Resiliencia Realizada:</text>
+    <text x="1071" y="369" font-size="8.5" fill="#475569">• Detención controlada con docker stop node3</text>
+    <text x="1071" y="384" font-size="8.5" fill="#475569">• Detección y notificación en Alertmanager</text>
+    <text x="1071" y="399" font-size="8.5" fill="#15803d">• Reincorporación limpia y automática</text>
+
+    <line x1="1071" y1="416" x2="1285" y2="416" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="1071" y="434" font-size="8.5" font-weight="700" fill="#0f172a">Volumen de datos:</text>
+    <text x="1071" y="450" font-size="8" fill="#64748b">node3_data:/var/lib/postgresql/data</text>
+    <text x="1071" y="470" font-size="8.5" font-weight="600" fill="#64748b">Respuesta HAProxy: HTTP 503 (Standby)</text>
+    <text x="1071" y="488" font-size="8" fill="#059669">Sincronización fluida con el Líder</text>
+  </g>
+
+  <!-- CANAL DE REPLICACIÓN WAL (Líneas limpias con texto directo sin cajitas plásticas) -->
+  <line x1="777" y1="240" x2="797" y2="240" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="787" y="234" font-size="8" font-weight="700" fill="#2563eb" text-anchor="middle">WAL</text>
+
+  <!-- WAL Stream hacia node3 pasando por arriba sin estorbar texto -->
+  <path d="M 777 225 L 787 225 L 787 173 L 1048 173 L 1048 240 L 1058 240" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="918" y="170" font-size="8" font-weight="700" fill="#2563eb" text-anchor="middle">Streaming de WAL (Slot node3)</text>
+
+  <!-- ========================================================================= -->
+  <!-- SECCION INFERIOR: CAPA DE MONITOREO Y OBSERVABILIDAD (y=535 a y=940)     -->
+  <!-- ========================================================================= -->
+
+  <g id="capa-monitoreo">
+    <rect x="25" y="535" width="1285" height="395" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="667" y="558" font-size="11.5" font-weight="700" fill="#1e3a8a" text-anchor="middle" letter-spacing="0.5">MONITOREO Y OBSERVABILIDAD (PROMETHEUS + ALERTMANAGER + GRAFANA)</text>
+    <line x1="45" y1="568" x2="1290" y2="568" stroke="#e2e8f0" stroke-width="1"/>
+
+    <!-- EXPORTERS INDIVIDUALES DE POSTGRESQL -->
+    <!-- Exporter Node 1 -->
+    <rect x="38" y="580" width="168" height="230" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="122" y="602" font-size="10" font-weight="700" fill="#1d4ed8" text-anchor="middle">exporter-node1 :9187</text>
+    <line x1="46" y1="610" x2="198" y2="610" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="46" y="628" font-size="8.5" font-weight="700" fill="#059669">Estado: Activo (1/1)</text>
+    <text x="46" y="643" font-size="8" fill="#475569">Destino: node1:5432</text>
+    <text x="46" y="658" font-size="8" fill="#0284c7">Redes: red-patroni + redtpfinal</text>
+    <line x1="46" y1="666" x2="198" y2="666" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="46" y="682" font-size="8.5" font-weight="700" fill="#0f172a">Métricas del Líder:</text>
+    <text x="46" y="697" font-size="7.5" fill="#475569">• Salud del motor (pg_up)</text>
+    <text x="46" y="710" font-size="7.5" fill="#475569">• Retraso de réplicas en bytes</text>
+    <text x="46" y="723" font-size="7.5" fill="#475569">• Cantidad de conexiones activas</text>
+    <text x="46" y="736" font-size="7.5" fill="#475569">• Detección de bloqueos muertos</text>
+    <text x="46" y="749" font-size="7.5" fill="#475569">• Volumen de registros WAL</text>
+    <text x="46" y="762" font-size="7.5" fill="#475569">• Commits, rollbacks y consultas</text>
+    <text x="46" y="792" font-size="7.5" font-weight="600" fill="#1e3a8a">Métricas transaccionales</text>
+
+    <!-- Exporter Node 2 -->
+    <rect x="214" y="580" width="168" height="230" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="298" y="602" font-size="10" font-weight="700" fill="#334155" text-anchor="middle">exporter-node2 :9187</text>
+    <line x1="222" y1="610" x2="374" y2="610" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="222" y="628" font-size="8.5" font-weight="700" fill="#059669">Estado: Activo (1/1)</text>
+    <text x="222" y="643" font-size="8" fill="#475569">Destino: node2:5432</text>
+    <text x="222" y="658" font-size="8" fill="#0284c7">Redes: red-patroni + redtpfinal</text>
+    <line x1="222" y1="666" x2="374" y2="666" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="222" y="682" font-size="8.5" font-weight="700" fill="#0f172a">Métricas de Réplica 2:</text>
+    <text x="222" y="697" font-size="7.5" fill="#475569">• Salud del motor (pg_up)</text>
+    <text x="222" y="710" font-size="7.5" fill="#475569">• Desfase frente al primario</text>
+    <text x="222" y="723" font-size="7.5" fill="#475569">• Conexiones en solo lectura</text>
+    <text x="222" y="736" font-size="7.5" fill="#475569">• Lectura de tablas e índices</text>
+    <text x="222" y="749" font-size="7.5" fill="#475569">• Estado del flujo streaming</text>
+    <text x="222" y="792" font-size="7.5" font-weight="600" fill="#334155">Telemetría de Standby</text>
+
+    <!-- Exporter Node 3 -->
+    <rect x="390" y="580" width="168" height="230" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="474" y="602" font-size="10" font-weight="700" fill="#334155" text-anchor="middle">exporter-node3 :9187</text>
+    <line x1="398" y1="610" x2="550" y2="610" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="398" y="628" font-size="8.5" font-weight="700" fill="#059669">Estado: Activo (1/1)</text>
+    <text x="398" y="643" font-size="8" fill="#475569">Destino: node3:5432</text>
+    <text x="398" y="658" font-size="8" fill="#0284c7">Redes: red-patroni + redtpfinal</text>
+    <line x1="398" y1="666" x2="550" y2="666" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="398" y="682" font-size="8.5" font-weight="700" fill="#0f172a">Métricas de Réplica 3:</text>
+    <text x="398" y="697" font-size="7.5" fill="#475569">• Salud del motor (pg_up)</text>
+    <text x="398" y="710" font-size="7.5" fill="#475569">• Detección de caída en 30s</text>
+    <text x="398" y="723" font-size="7.5" fill="#475569">• Conexiones en solo lectura</text>
+    <text x="398" y="736" font-size="7.5" fill="#475569">• Lectura de tablas e índices</text>
+    <text x="398" y="749" font-size="7.5" fill="#475569">• Estado del flujo streaming</text>
+    <text x="398" y="792" font-size="7.5" font-weight="600" fill="#b91c1c">Nodo probado en cortes</text>
+
+    <!-- cAdvisor (Containers) -->
+    <rect x="566" y="580" width="165" height="230" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="648" y="602" font-size="10" font-weight="700" fill="#1e3a8a" text-anchor="middle">cAdvisor :8080</text>
+    <line x1="574" y1="610" x2="723" y2="610" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="574" y="628" font-size="8.5" font-weight="700" fill="#059669">Estado: Activo</text>
+    <text x="574" y="643" font-size="8" fill="#475569">Destino: cadvisor:8080</text>
+    <text x="574" y="658" font-size="8" fill="#0284c7">Host: localhost:8083</text>
+    <line x1="574" y1="666" x2="723" y2="666" stroke="#f1f5f9" stroke-width="1"/>
+    <text x="574" y="682" font-size="8.5" font-weight="700" fill="#0f172a">Métricas de Contenedores:</text>
+    <text x="574" y="697" font-size="7.5" fill="#475569">• Uso de procesador por nodo</text>
+    <text x="574" y="710" font-size="7.5" fill="#475569">• Consumo de memoria RAM</text>
+    <text x="574" y="723" font-size="7.5" fill="#475569">• Tráfico de red de entrada/salida</text>
+    <text x="574" y="736" font-size="7.5" fill="#475569">• Operaciones sobre discos y volúmenes</text>
+    <text x="574" y="749" font-size="7.5" fill="#475569">• Filtrado por nombre de contenedor</text>
+    <text x="574" y="792" font-size="7.5" font-weight="600" fill="#64748b">Telemetría de recursos</text>
+
+    <!-- PROMETHEUS SERVER -->
+    <rect x="740" y="580" width="225" height="230" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.6"/>
+    <text x="852" y="602" font-size="11" font-weight="700" fill="#1d4ed8" text-anchor="middle">Servidor Prometheus :9090</text>
+    <line x1="750" y1="610" x2="955" y2="610" stroke="#bfdbfe" stroke-width="1"/>
+
+    <text x="750" y="628" font-size="8.5" font-weight="700" fill="#1e3a8a">Panel web: localhost:9090</text>
+    <text x="750" y="643" font-size="8" fill="#334155">• Intervalo de recolección y evaluación: 15s</text>
+    <text x="750" y="658" font-size="8" font-weight="700" fill="#059669">5 orígenes de métricas activos (100% UP)</text>
+    <line x1="750" y1="666" x2="955" y2="666" stroke="#bfdbfe" stroke-width="1"/>
+    
+    <text x="750" y="682" font-size="8.5" font-weight="700" fill="#b91c1c">Reglas de Alerta Configuradas:</text>
+    <text x="750" y="697" font-size="7.5" fill="#475569">1. PostgresNodeDown (Caída de un nodo)</text>
+    <text x="750" y="709" font-size="7.5" fill="#475569">2. PostgresExporterDown (Falla de exporter)</text>
+    <text x="750" y="721" font-size="7.5" fill="#475569">3. PostgresHighConnections (&gt;80% conex.)</text>
+    <text x="750" y="733" font-size="7.5" fill="#475569">4. PostgresReplicationLag (&gt;16MB desfase)</text>
+    <text x="750" y="745" font-size="7.5" fill="#475569">5. PostgresReplicasDegraded (&lt;2 réplicas)</text>
+    <text x="750" y="757" font-size="7.5" fill="#475569">6. PostgresDeadlocksDetected (deadlocks)</text>
+    <text x="750" y="769" font-size="7.5" fill="#475569">7. HostHighCpuUsage (&gt;85% uso CPU)</text>
+    <text x="750" y="781" font-size="7.5" fill="#475569">8. HostLowMemory (&lt;15% RAM libre)</text>
+    <text x="750" y="793" font-size="7.5" fill="#475569">9. HostHighDiskUsage (&gt;85% disco)</text>
+
+    <!-- ALERTMANAGER -->
+    <rect x="995" y="580" width="135" height="230" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.2"/>
+    <text x="1062" y="602" font-size="10.5" font-weight="700" fill="#dc2626" text-anchor="middle">Alertmanager :9093</text>
+    <line x1="1005" y1="610" x2="1120" y2="610" stroke="#fecaca" stroke-width="1"/>
+    <text x="1005" y="628" font-size="8.5" font-weight="700" fill="#991b1b">Panel: localhost:9093</text>
+    <text x="1005" y="643" font-size="8" fill="#475569">Gestión de alertas:</text>
+    <line x1="1005" y1="650" x2="1120" y2="650" stroke="#fecaca" stroke-width="1"/>
+    <text x="1005" y="668" font-size="7.5" fill="#334155">• Agrupamiento inteligente</text>
+    <text x="1005" y="681" font-size="7.5" fill="#334155">• Deduplicación de avisos</text>
+    <text x="1005" y="694" font-size="7.5" fill="#334155">• Silenciamiento y filtros</text>
+    <line x1="1005" y1="706" x2="1120" y2="706" stroke="#fecaca" stroke-width="1"/>
+    <text x="1005" y="724" font-size="8.5" font-weight="700" fill="#b91c1c">Destinatario configurado:</text>
+    <text x="1005" y="740" font-size="8" fill="#334155">n8n-webhook</text>
+    <text x="1005" y="754" font-size="7.5" fill="#475569">POST /webhook/alerts</text>
+    <text x="1005" y="768" font-size="7.5" fill="#475569">http://n8n:5678</text>
+    <text x="1005" y="792" font-size="7.5" font-weight="600" fill="#dc2626">Envío a GLPI / Canales</text>
+
+    <!-- GRAFANA -->
+    <rect x="1160" y="580" width="135" height="230" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="1227" y="602" font-size="10.5" font-weight="700" fill="#d97706" text-anchor="middle">Grafana :3001</text>
+    <line x1="1170" y1="610" x2="1285" y2="610" stroke="#fde68a" stroke-width="1"/>
+    <text x="1170" y="628" font-size="8.5" font-weight="700" fill="#b45309">Panel: localhost:3001</text>
+    <text x="1170" y="643" font-size="8" fill="#475569">Dashboard del Clúster:</text>
+    <line x1="1170" y1="650" x2="1285" y2="650" stroke="#fde68a" stroke-width="1"/>
+    <text x="1170" y="668" font-size="7.5" fill="#334155">• Vista global de salud</text>
+    <text x="1170" y="681" font-size="7.5" fill="#334155">• Gráficos por nodo HA</text>
+    <text x="1170" y="694" font-size="7.5" fill="#334155">• Uso de CPU, RAM y red</text>
+    <text x="1170" y="707" font-size="7.5" fill="#334155">• Operaciones de entrada/salida</text>
+    <text x="1170" y="720" font-size="7.5" fill="#334155">• Consultas y transacciones</text>
+    <text x="1170" y="733" font-size="7.5" fill="#334155">• Monitoreo de replicación</text>
+    <text x="1170" y="792" font-size="7.5" font-weight="600" fill="#b45309">Fuente: Prometheus</text>
+
+    <!-- BUS DE SCRAPING DE PROMETHEUS -->
+    <line x1="122" y1="810" x2="122" y2="845" stroke="#2563eb" stroke-width="1.8"/>
+    <line x1="298" y1="810" x2="298" y2="845" stroke="#2563eb" stroke-width="1.8"/>
+    <line x1="474" y1="810" x2="474" y2="845" stroke="#2563eb" stroke-width="1.8"/>
+    <line x1="648" y1="810" x2="648" y2="845" stroke="#2563eb" stroke-width="1.8"/>
+
+    <line x1="122" y1="845" x2="790" y2="845" stroke="#2563eb" stroke-width="1.8"/>
+    <line x1="790" y1="845" x2="790" y2="815" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+    <text x="450" y="862" font-size="9" font-weight="700" fill="#1e3a8a" text-anchor="middle">Recolección periódica de métricas vía HTTP GET /metrics (cada 15 segundos)</text>
+
+    <!-- Conexión Prometheus -> Alertmanager (Directa y limpia sin cajita) -->
+    <line x1="965" y1="640" x2="995" y2="640" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+    <text x="980" y="633" font-size="8" font-weight="700" fill="#dc2626" text-anchor="middle">Alertas</text>
+
+    <!-- Conexión Prometheus -> Grafana (Curva limpia con texto directo) -->
+    <path d="M 852 580 L 852 570 L 1227 570 L 1227 580" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="3,3" marker-end="url(#arrow-amber)"/>
+    <text x="1040" y="565" font-size="8" font-weight="700" fill="#d97706" text-anchor="middle">Consultas PromQL (localhost:9090)</text>
+
+    <!-- Leyenda de Redes al pie sin marco artificial ni cajón pesado -->
+    <line x1="45" y1="875" x2="1290" y2="875" stroke="#e2e8f0" stroke-width="1"/>
+    
+    <circle cx="52" cy="893" r="4" fill="#0284c7"/>
+    <text x="64" y="896" font-size="9" font-weight="700" fill="#0f172a">redtpfinal (Red general interna):</text>
+    <text x="235" y="896" font-size="8.5" fill="#475569">Conecta Frontend (Angular), Backend (Node.js / Sequelize), HAProxy (postgres), pgAdmin, Grafana, Alertmanager, GLPI, Nextcloud y n8n.</text>
+
+    <circle cx="52" cy="912" r="4" fill="#1e3a8a"/>
+    <text x="64" y="915" font-size="9" font-weight="700" fill="#0f172a">red-patroni (Red privada aislada):</text>
+    <text x="235" y="915" font-size="8.5" fill="#475569">Aislamiento total sin salida a Internet. Conecta exclusivamente el cluster (etcd, node1, node2, node3, HAProxy y los 3 postgres-exporters).</text>
+  </g>
+</svg>

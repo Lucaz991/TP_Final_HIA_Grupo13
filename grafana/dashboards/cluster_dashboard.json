@@ -244,7 +244,7 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": ["postgresql", "patroni", "cluster", "cadvisor", "monitoreo"],
-  "time": { "from": "now-15m", "to": "now" },
+  "time": { "from": "now-5m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "Clúster PostgreSQL - Monitorización Completa",
