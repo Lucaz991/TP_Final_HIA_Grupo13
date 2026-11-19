@@ -377,7 +377,7 @@ a { color: var(--accent); }
         <li>Normalizar respuestas: IDs malformados devuelven 500 y login inexistente responde 200 con `status:0`.</li>
         <li>ZAP/sqlmap acotado o justificación formal de la matriz propia.</li>
         <li>Headers/CSP de producción, no solo la CSP restrictiva del laboratorio.</li>
-        <li>Gitleaks del historial y re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`.</li>
+        <li>Re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`. Gitleaks ya pasó: sin secretos en 71 commits.</li>
         <li>Revisión productiva de `latest`, `privileged`, montajes, recursos, redes y secretos.</li>
         <li>Permisos del workflow CI/CD, escaneos en pipeline y protecciones de rama en GitHub.</li>
         <li>Revisar fortaleza de credenciales de GLPI/Nextcloud/n8n/Grafana: son la única barrera (Access descartado).</li>

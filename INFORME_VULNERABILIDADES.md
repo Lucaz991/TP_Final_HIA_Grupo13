@@ -399,6 +399,27 @@ sandbox) si el tiempo lo permite — hoy solo están las tres imágenes propias.
 `npm audit fix` no rompiente en frontend para la cadena de build, decisión
 documentada sobre `xlsx`, y pin de versiones donde el compose usa `latest`.
 
+### H24-SEC-01: secretos en historial Git (Gitleaks 8.30.1)
+
+**Estado: ejecutado el 19/11/2026 — sin secretos reales encontrados.**
+Escaneo de los **71 commits** del repositorio con `--redact`
+(`security-test/gitleaks-results.json`). Gitleaks reportó 6 coincidencias
+`generic-api-key`, todas **falsos positivos**:
+
+- Tres repiten el mismo JWT truncado ilustrativo de `backend/swagger.js:80`
+  (`eyJhbGciOiJIUzI1NiIsIn...`, ejemplo de la documentación de endpoints):
+  una en el propio swagger, una citada dentro de este informe y dos dentro
+  del `gitleaks-report.json` de la revisión anterior que quedó commiteado.
+- Una es `N8N_SANDBOX_SERVICE_API_KEY=` en `.env.example`, una línea
+  **vacía** que el patrón de nombre de variable marcó igualmente.
+
+El resultado es consistente con `.env` en `.gitignore` y con el uso de
+`TUNNEL_TOKEN`, `MP_*`, `GROQ_API_KEY` y claves del laboratorio solo por
+variables de entorno. Observación menor de higiene: el viejo
+`gitleaks-report.json` quedó versionado; no contiene secretos pero puede
+generar ruido en futuros escaneos — evaluar borrarlo del historial o agregar
+`gitleaks-report.json` al `.gitignore`.
+
 ### Retest integrado 18/11/2026
 
 `python security-test/verify.py --authorization` pasó **62/62** casos sobre el
