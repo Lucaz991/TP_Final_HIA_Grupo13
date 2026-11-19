@@ -23,14 +23,18 @@ chatCtrl.sendMessage = async (req, res) => {
     */
     try {
         const { message } = req.body;
-        if (!message || message.trim() === '') {
+        if (typeof message !== 'string' || message.trim() === '') {
             return res.status(400).json({ status: 0, msg: 'El mensaje no puede estar vacío' });
         }
+        const cleanMessage = message.trim();
+        if (cleanMessage.length > 1000) {
+            return res.status(400).json({ status: 0, msg: 'El mensaje supera el máximo de 1000 caracteres' });
+        }
 
-        // construir contexto desde la BD y pasamos el mensaje para filtrar lo que necesitamos
-        const systemPrompt = await contextService.buildContext(message);
+        // construir contexto desde la BD filtrado por el usuario autenticado
+        const systemPrompt = await contextService.buildContext(cleanMessage, req.userId);
         // llamar a la IA
-        const response = await aiService.getResponse(systemPrompt, message);
+        const response = await aiService.getResponse(systemPrompt, cleanMessage);
 
         res.json({ status: 1, msg: 'success', data: response });
 
