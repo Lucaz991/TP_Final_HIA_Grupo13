@@ -332,6 +332,48 @@ injection. Quedan como superficie aceptada los campos de perfil del profesor
 Groq como subprocesador; documentarlo en la matriz. El frontend escapa la
 respuesta (`{{ msg.text }}`), sin XSS por salida del modelo.
 
+### H24-SCAN-01: dependencias e imágenes de producción (npm audit + Trivy)
+
+**Estado: ejecutado el 19/11/2026; remediaciones propuestas con responsables por asignar.**
+Escaneo sobre el árbol de dependencias del repositorio (los mismos
+`package.json`/`package-lock.json` que usan los Dockerfiles de producción) y
+sobre imágenes construidas con esos Dockerfiles. Evidencia:
+`security-test/npm-audit-backend.json`, `npm-audit-frontend.json`,
+`trivy-*.json` (Trivy 0.76.2, severidad HIGH+CRITICAL).
+
+**npm audit:**
+
+- **Backend (dependencias de runtime):** 2 moderadas — `uuid <11.1.1`
+  (GHSA-w5hq-g745-h8pq, bounds check en v3/v5/v6) llega vía `sequelize`. El
+  fix exige un downgrade rompiente de Sequelize: riesgo residual documentado,
+  no expone entrada de usuario directa.
+- **Frontend:** 19 (17 moderadas, 2 altas). Casi todas pertenecen a la cadena
+  de build (Angular CLI → `pacote`/`glob`/`minimatch`/`brace-expansion`/
+  `cross-spawn`/`sigstore`): **no llegan al bundle servido**. La excepción de
+  runtime es **`xlsx@0.18.5` — 2 altas sin fix** (prototype pollution
+  GHSA-4r6h-8v6p-xvw6 y ReDoS GHSA-5pgg-2g8v-p4x9), usada solo en el
+  dashboard admin para exportar tutorías a Excel sobre datos propios.
+  Superficie contenida; opciones: aceptar el riesgo documentado o migrar a
+  `exceljs`/`file-saver`.
+
+**Trivy (imágenes construidas con los Dockerfiles de producción):**
+
+| Imagen | CVEs únicos | Con fix | Lectura |
+|---|---|---|---|
+| `postgres:18.6` (= `postgres:18`, base del clúster Patroni, `backup` y `nextcloud-db`) | 2 CRITICAL + 60 HIGH | 1 CRITICAL + 27 HIGH | Debian 13: la mayoría son paquetes del OS no usados por PostgreSQL (util-linux, krb5, gnupg, perl, sqlite). CRITICAL sin fix: `libxml2` CVE-2026-6653; `stdlib` Go CVE-2025-68121 en binario embebido. Mitigación: rebuild periódico con base actualizada; evaluar imagen más reducida. |
+| `hia-security-test-backend` (`node:20-alpine`) | 1 CRITICAL + 25 HIGH | Todos | `tar` CVE-2026-59873 (gzip bomb) es dependencia empaquetada de npm dentro de la imagen base; openssl/musl/zlib tienen release nuevo. Mitigación: rebuild `--pull` o `apk upgrade`. |
+| `hia-security-test-frontend` (nginx) | 3 HIGH | Todos | `libxslt` 1.1.43-r3 → r4. Mitigación: rebuild con base actualizada. |
+
+**Límites:** las imágenes se construyeron en fecha anterior con los Dockerfiles
+actuales; una build fresca puede resolver ya parte de los CVE con fix.
+Re-escanear las imágenes efectivamente desplegadas tras la integración, y
+repetir Trivy sobre el resto del stack (n8n, GLPI, Nextcloud, exporters,
+sandbox) si el tiempo lo permite — hoy solo están las tres imágenes propias.
+
+**Acciones propuestas:** rebuild con `--pull` antes del despliegue final,
+`npm audit fix` no rompiente en frontend para la cadena de build, decisión
+documentada sobre `xlsx`, y pin de versiones donde el compose usa `latest`.
+
 ### Retest integrado 18/11/2026
 
 `python security-test/verify.py --authorization` pasó **62/62** casos sobre el
