@@ -332,6 +332,31 @@ injection. Quedan como superficie aceptada los campos de perfil del profesor
 Groq como subprocesador; documentarlo en la matriz. El frontend escapa la
 respuesta (`{{ msg.text }}`), sin XSS por salida del modelo.
 
+### H24-CRED-01: limitador de login agrupado bajo la IP del proxy
+
+**Estado: corregido y verificado en laboratorio el 19/11/2026.**
+**Severidad: media.** Sin `trust proxy`, `req.ip` era siempre la IP de Nginx:
+los cinco intentos de login cada 15 minutos se compartían entre **todos** los
+usuarios. Un usuario que agotaba el contador bloqueaba el login del resto
+(DoS accidental o malicioso), y el atacante real no quedaba identificado en
+los registros. express-rate-limit ya lo advertía con
+`ERR_ERL_UNEXPECTED_X_FORWARDED_FOR`.
+
+**Corrección:** `app.set('trust proxy', 'loopback, linklocal, uniquelocal')`.
+Se confía en los saltos de red privada/loopback (contenedores Docker y el
+túnel) y `req.ip` queda como la primera IP pública de la cadena — funciona
+para el laboratorio (`browser → Nginx → backend`) y para producción
+(`browser → Cloudflare → cloudflared → Nginx → backend`) sin contar saltos.
+
+**Verificación:** seis intentos de login con `X-Forwarded-For: 10.9.9.9`
+produjeron `429` en el sexto; con `10.9.9.8` y `10.9.9.7` respondieron `200`.
+El warning ERL desapareció de los logs.
+
+**Riesgo residual:** un origen que alcance el backend sin pasar por Nginx
+(otro contenedor de `redtpfinal`) puede spoofear `X-Forwarded-For`; el
+backend no publica puerto al host, así que la superficie queda limitada a la
+red interna. El limitador de chat clavea por `userId` y no depende de la IP.
+
 ### H24-SCAN-01: dependencias e imágenes de producción (npm audit + Trivy)
 
 **Estado: ejecutado el 19/11/2026; remediaciones propuestas con responsables por asignar.**

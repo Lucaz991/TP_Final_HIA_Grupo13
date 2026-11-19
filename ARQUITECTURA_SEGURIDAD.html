@@ -374,7 +374,7 @@ a { color: var(--accent); }
     <article class="card">
       <h2>Controles pendientes</h2>
       <ul>
-        <li>Rate limit detrás del proxy: corregir `trust proxy`/`X-Forwarded-For` y probar que no agrupe usuarios.</li>
+        <li>Normalizar respuestas: IDs malformados devuelven 500 y login inexistente responde 200 con `status:0`.</li>
         <li>ZAP/sqlmap acotado o justificación formal de la matriz propia.</li>
         <li>Headers/CSP de producción, no solo la CSP restrictiva del laboratorio.</li>
         <li>Gitleaks del historial y re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`.</li>
@@ -421,7 +421,7 @@ const architectures = {
       {id:'cf', x:190, y:82, w:145, h:64, status:'partial', title:'Cloudflare', subtitle:'TLS + DNS + Tunnel', meta:'Edge público', details:'Termina TLS y enruta hostnames. Sin Access: cada servicio administrativo valida con su propia cuenta.', controls:['TLS público','DDoS/edge protection','Webhook público']},
       {id:'tunnel', x:380, y:82, w:135, h:64, status:'partial', title:'cloudflared', subtitle:'Named Tunnel', meta:'Sin puerto entrante', details:'Conector saliente hacia Cloudflare. Puede tener réplicas; el público ve la máquina que responde.', controls:['TUNNEL_TOKEN en .env','No requiere abrir puertos WAN','Réplicas documentadas']},
       {id:'nginx', x:565, y:82, w:145, h:64, status:'active', title:'app-frontend', subtitle:'Angular + Nginx', meta:'Interno :80 · localhost :8081', details:'Sirve la SPA y reenvía /api al backend. En laboratorio usa otra CSP.', controls:['Proxy /api → backend','Headers web','cap_drop ALL + capacidades mínimas']},
-      {id:'api', x:755, y:82, w:150, h:64, status:'active', title:'app-backend', subtitle:'Express API', meta:'Interno :3000 · localhost :3000', details:'Ejecuta autenticación, autorización por propietario/rol, validaciones y firma del webhook.', controls:['JWT','Rol admin','BOLA corregido en alcance probado','HMAC webhook','Rate limit login pendiente tras proxy']},
+      {id:'api', x:755, y:82, w:150, h:64, status:'active', title:'app-backend', subtitle:'Express API', meta:'Interno :3000 · localhost :3000', details:'Ejecuta autenticación, autorización por propietario/rol, validaciones y firma del webhook.', controls:['JWT','Rol admin','BOLA corregido en alcance probado','HMAC webhook','Rate limit por IP real (trust proxy)']},
       {id:'proxy', x:950, y:82, w:130, h:64, status:'partial', title:'HAProxy', subtitle:'Alias postgres', meta:'localhost :5465 · stats :7000', details:'Punto único de entrada a PostgreSQL para el backend.', controls:['Health checks','Backend no conoce nodos','Puerto local solamente']},
       {id:'patroni', x:1090, y:70, w:90, h:88, status:'partial', title:'Patroni', subtitle:'node1-3 + etcd', meta:'PostgreSQL 18', details:'Clúster HA con replicación y etcd. La réplica no reemplaza backups.', controls:['Replicación','Failover','Backups/restauración pendientes de ensayo']},
       {id:'access', x:380, y:230, w:135, h:64, status:'partial', title:'Auth servicio', subtitle:'Cuentas propias', meta:'Sin Cloudflare Access', details:'Decisión del grupo: no hay capa de Access; GLPI, Nextcloud, n8n y Grafana exigen sus propias credenciales. La fortaleza de esas cuentas es la única barrera.', controls:['Login propio por servicio','Credenciales fuertes pendientes de revisión','Riesgo aceptado documentado']},

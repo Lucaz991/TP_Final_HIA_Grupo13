@@ -12,6 +12,11 @@ require('./src/models/solicitudes/asociaciones.model.js'); // Importa las asocia
 //Creacion de la aplicacion 
 var app = express();
 
+// Detras de Nginx (y cloudflared en produccion): la IP real del cliente
+// llega en X-Forwarded-For. Confiamos solo en saltos de red privada/loopback;
+// sin esto express-rate-limit agrupa a todos los usuarios bajo la IP del proxy.
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
 //Middlewares  
 app.use(express.json()); //permite recibir JSON 
 app.use(cors({

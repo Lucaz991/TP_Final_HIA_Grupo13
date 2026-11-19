@@ -97,9 +97,12 @@ produccion. Las diferencias de ejecucion son:
   se realizaban a traves de Calendar.
 - La clave JWT y la base no se comparten con produccion. El backend puede modificar
   su esquema para `sequelize.sync()`, pero no es superusuario PostgreSQL.
-- Se conservan el limitador de login y los headers del proxy. Los intentos pasan
-  por Nginx: el comportamiento de IP compartida/trust proxy sigue pendiente de
-  evaluacion. No se desactiva el limitador para facilitar un escaneo.
+- Se conservan el limitador de login y los headers del proxy. `trust proxy`
+  quedo configurado en `loopback, linklocal, uniquelocal`: la IP del cliente
+  real se lee de `X-Forwarded-For` y cada origen tiene su propio balde de
+  intentos (verificado con XFF distintos via `docker exec`: 429 en el sexto
+  intento de una IP, sin afectar a otras). No se desactiva el limitador para
+  facilitar un escaneo.
 
 Las dependencias/imagenes se resuelven durante el build con acceso a Internet.
 El bloqueo de red corresponde a la ejecucion del backend y base. Repetir la
