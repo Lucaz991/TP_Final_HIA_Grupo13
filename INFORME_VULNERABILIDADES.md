@@ -484,6 +484,19 @@ el resto documentado con remediaciones propuestas.**
 | 12 | Servicio `backup` es `sleep infinity` con credenciales admin | Bajo: sugiere ejecución manual del respaldo | Documentar el procedimiento real usado en la restauración ya probada |
 | 13 | `sandbox-certs` corre como `user: '0:0'` | Bajo: one-shot de bootstrap que finaliza | Aceptable; revisar si puede bajar privilegios |
 
+**Hallazgos al levantar el stack (19/11/2026):**
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| 14 | `glpi-db`: el volumen contiene datos de MySQL **26.10**; el tag `mysql:8.4` aborta con "Cannot downgrade". Demuestra el riesgo real del hallazgo 3 (`latest` flotante en el despliegue original) | Fix **local** en `compose.override.yaml` (digest fijo 26.10). El repo remoto queda intacto; el equipo debe decidir versión definitiva o migración |
+| 15 | `nextcloud-db`: el volumen contiene un clúster **PostgreSQL 17** en raíz; `postgres:18` exige el nuevo layout por versión y aborta | Fix **local** en `compose.override.yaml` (`postgres:17` + `PGDATA=/var/lib/postgresql`). Migración a 18 requiere `pg_upgrade` planificado |
+| 16 | Docker Desktop con **3.7 GB RAM** en host de 8 GB: al levantar los ~30 servicios se producen salidas por falta de memoria (Grafana "cannot allocate memory", exit 255 masivos) | Lab detenido cuando no se usa; documentado como restricción del host. En servidor real aumentar memoria asignada |
+| 17 | `monitor.hia-26.com` seguía publicando Prometheus (config de túnel v8 en Cloudflare) | Dado de baja en el dashboard; config v9 sin esa ruta. Prometheus interno |
+
+El archivo `compose.override.yaml` queda en `.git/info/exclude`: aplica
+solo en esta máquina para compatibilidad de datos existentes, sin alterar
+el compose remoto sobre el que trabaja el equipo.
+
 **Verificado correcto:** todos los puertos publicados están en `127.0.0.1`,
 la publicación externa depende solo del túnel saliente, las redes separan el
 clúster de datos (`red-patroni`) del plano de aplicación (`redtpfinal`) y el
