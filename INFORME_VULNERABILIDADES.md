@@ -399,6 +399,59 @@ sandbox) si el tiempo lo permite — hoy solo están las tres imágenes propias.
 `npm audit fix` no rompiente en frontend para la cadena de build, decisión
 documentada sobre `xlsx`, y pin de versiones donde el compose usa `latest`.
 
+### H24-ERR-01: respuestas de error inconsistentes
+
+**Estado: corregido y verificado el 19/11/2026 en laboratorio.**
+
+**Hallazgo (detectado durante la matriz SQLi):**
+
+- Un `id` no numérico en la URL (`/api/categoria/abc`) llegaba a
+  `findByPk` y el error de casteo de Sequelize devolvía **HTTP 500** —
+  la API filtraba un error interno por un input inválido del cliente.
+- `loginUsuario` accedía a `user.contraseniaHash` **antes** de verificar
+  `!user`: un email inexistente producía `TypeError` → HTTP 500; y con
+  contraseña incorrecta devolvía **HTTP 200** con `status:0`. Además la
+  comparación bcrypt solo corría si el usuario existía, lo que permitía
+  enumerar emails válidos por tiempo de respuesta.
+- `getCategoria` devolvía HTTP 200 con `status:0` para ID inexistente.
+
+**Correcciones:**
+
+- Nuevo `middleware/validarParamIds.js` registrado vía `router.param()`
+  en todos los routers (`aplicarIds` en `index.js`): parámetros `id`,
+  `profesorId`, `solicitudId`, `tutoriaId`, `respuestaId`, `horarioId`
+  no numéricos → **400** antes de llegar al controlador. Nota técnica:
+  los param callbacks de Express no se heredan a routers montados, por
+  eso se registran sobre cada router individual.
+- Login: `!user || !coincide` → **401** con mensaje uniforme
+  "Credenciales inválidas." y comparación bcrypt contra hash fijo
+  cuando el usuario no existe (mismo costo → sin enumeración por
+  timing). El `catch` ahora devuelve 500 genérico en vez de 200.
+- `getCategoria` ID inexistente → **404**.
+
+**Verificado en laboratorio (docker exec):**
+
+```text
+/api/categoria/abc        -> 400 (antes 500)
+/api/categoria/1abc       -> 400
+/api/categoria/99999      -> 404 (antes 200 con status:0)
+/api/categoria/1          -> 200 (sin regresión)
+/api/tutoria/abc          -> 400 (validación previa a auth)
+/api/tutoria/1 sin token  -> 401 (auth intacta)
+/api/categoria/profesor/abc -> 400 (param profesorId)
+login email inexistente   -> 401 (antes 500 por TypeError)
+login password incorrecta -> 401 (antes 200 con status:0)
+login válido              -> 200 status:1 token presente
+```
+
+**Regresión:** matriz de autorización completa re-ejecutada tras el
+cambio: **62/62 PASS** (los param callbacks disparan antes que la
+cadena de middlewares de la ruta, sin alterar auth).
+
+**Observación menor registrada:** `index.js` monta dos veces las rutas
+`/api/mercadopago` y `/api/calificacion` (el segundo mount nunca
+matchea); código muerto sin impacto de seguridad.
+
 ### H24-INFRA-01: revisión del compose de producción
 
 **Estado: revisado el 19/11/2026; un hallazgo crítico corregido en la rama,

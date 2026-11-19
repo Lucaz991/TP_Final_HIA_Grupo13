@@ -103,8 +103,11 @@ autenticacionCtrl.loginUsuario = async (req, res) => {
             }
         });
 
-        const coincide = await passwordService.comparePassword(req.body.password, user.contraseniaHash);
-        if (!user || !coincide) return res.json({ status: 0, msg: "not found" });
+        // Hash fijo para comparar cuando el usuario no existe:
+        // mantiene el costo de bcrypt uniforme y evita enumeración por tiempo de respuesta.
+        const hash = user ? user.contraseniaHash : '$2b$10$dXv56eYM1MUgJexfBjxUC.C4bHRHTIm.w9L9AGekrnV8DC0TmcY3q';
+        const coincide = await passwordService.comparePassword(req.body.password, hash);
+        if (!user || !coincide) return res.status(401).json({ status: 0, msg: "Credenciales inválidas." });
 
         else {
             const unToken = jwt.sign({id: user.id}, process.env.JWT_SECRET);
@@ -133,7 +136,8 @@ autenticacionCtrl.loginUsuario = async (req, res) => {
         }
 
     } catch (error) {
-        return res.json({ status: 0, msg: 'error' });
+        console.error('ERROR login:', error.message);
+        return res.status(500).json({ status: 0, msg: 'Error al iniciar sesión.' });
     }
 
 }

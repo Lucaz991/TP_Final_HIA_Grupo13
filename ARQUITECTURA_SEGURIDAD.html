@@ -374,7 +374,7 @@ a { color: var(--accent); }
     <article class="card">
       <h2>Controles pendientes</h2>
       <ul>
-        <li>Normalizar respuestas: IDs malformados devuelven 500 y login inexistente responde 200 con `status:0`.</li>
+        <li>Respuestas normalizadas (H24-ERR-01): IDs malformados → 400, login → 401 uniforme, inexistente → 404. Verificado + regresión 62/62.</li>
         <li>ZAP/sqlmap acotado o justificación formal de la matriz propia.</li>
         <li>Headers/CSP de producción, no solo la CSP restrictiva del laboratorio.</li>
         <li>Re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`. Gitleaks ya pasó: sin secretos en 71 commits.</li>

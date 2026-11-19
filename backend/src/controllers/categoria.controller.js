@@ -52,7 +52,7 @@ categoriaCtrl.getCategoria = async (req, res) => {
     */
     try {
         const categoria = await Categoria.findByPk(req.params.id);
-        if (!categoria) return res.json({ status: 0, msg: 'Categoría no encontrada' });
+        if (!categoria) return res.status(404).json({ status: 0, msg: 'Categoría no encontrada' });
         res.json({ status: 1, msg: 'success', data: categoria });
     } catch (error) {
         res.status(500).json({ status: 0, msg: 'Error al obtener categoría' });

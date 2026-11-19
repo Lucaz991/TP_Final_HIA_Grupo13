@@ -1,37 +1,37 @@
 {
-  "timestamp_utc": "2026-11-18T22:53:56.190853+00:00",
-  "source_commit": "dd76a29ecbf726b6c1344693c94162feebcb33a8",
-  "backend_image": "sha256:7139bcc87ea79c0a1569992fbd1dde37aabb934234dd8453a634b232e0bd5a3b",
+  "timestamp_utc": "2026-11-19T06:17:04.473620+00:00",
+  "source_commit": "9dcf467dea75e23d0a9ad4d5f94d3134408b99c2",
+  "backend_image": "sha256:39c5287da87843984ed3e3299be54c6460220ad49c8f346641bdc5860a1f7a7a",
   "target": "http://127.0.0.1:9081",
   "fixture_ids": {
     "tutorias": [
-      47,
-      48,
-      49,
-      50,
-      51
+      58,
+      59,
+      60,
+      61,
+      62
     ],
     "horarios": [
-      21,
-      22
+      23,
+      24
     ],
     "categorias": [
-      9,
-      10
+      11,
+      12
     ],
     "ayuda": {
       "solicitudes": [
-        26,
-        27,
-        28,
-        29
+        34,
+        35,
+        36,
+        37
       ],
       "respuestas": [
-        13,
-        14
+        18,
+        19
       ],
       "tutorias": [
-        52
+        63
       ]
     }
   },
