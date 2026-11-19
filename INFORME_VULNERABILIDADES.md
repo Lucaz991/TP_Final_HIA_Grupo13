@@ -399,6 +399,47 @@ sandbox) si el tiempo lo permite — hoy solo están las tres imágenes propias.
 `npm audit fix` no rompiente en frontend para la cadena de build, decisión
 documentada sobre `xlsx`, y pin de versiones donde el compose usa `latest`.
 
+### H24-INFRA-01: revisión del compose de producción
+
+**Estado: revisado el 19/11/2026; un hallazgo crítico corregido en la rama,
+el resto documentado con remediaciones propuestas.**
+
+**Corregido en esta revisión:**
+
+- **Grafana con `admin/admin` hardcodeado** (`GF_SECURITY_ADMIN_*`). Es el
+  único panel publicado (`grafana.hia-26.com`) y su protección depende
+  enteramente de sus credenciales: con valores por defecto era compromiso
+  inmediato. Ahora exige `${GRAFANA_ADMIN_USER:?}` y
+  `${GRAFANA_ADMIN_PASSWORD:?}` en `.env` (falla al levantar si faltan) y se
+  agregaron a `.env.example`.
+
+**Hallazgos documentados:**
+
+| # | Hallazgo | Riesgo | Recomendación |
+|---|---|---|---|
+| 1 | `sandbox-runner-1` con `privileged: true` (DinD) | Alto: contenedor comprometido = host | Requerido por el sandbox de n8n; mitigado por mTLS, sin puerto y red interna. Riesgo aceptado documentado |
+| 2 | `env_file: .env` en `sandbox-api`, `sandbox-runner-1` y `n8n` | Alto: inyecta TODOS los secretos (DB, JWT, MP, Google, Groq, TUNNEL) en contenedores que no los necesitan | Lista explícita de variables o `.env.n8n` separado |
+| 3 | Imágenes `latest`: cadvisor, postgres-exporter×3, grafana, nextcloud, glpi, searxng + `postgres:18` flotante | Medio: build no reproducible / supply chain | Fijar versiones como ya se hizo con etcd, mysql, pgadmin, haproxy, cloudflared |
+| 4 | `restart` inconsistente: etcd, nodos Patroni, prometheus, backend y frontend **sin** `unless-stopped` | Medio: tras reboot del host el clúster DB no vuelve solo | Uniformar `restart: unless-stopped` |
+| 5 | etcd con `ALLOW_NONE_AUTHENTICATION=yes` y Patroni REST :8000 sin auth | Medio: los postgres-exporters están en ambas redes → un servicio de `redtpfinal` comprometido alcanza etcd y puede manipular el clúster | Auth de etcd o aislar exporters; aceptado documentado |
+| 6 | cAdvisor monta `/`, `/var/run`, `/sys`, `/var/lib/docker` (ro) | Medio: lectura de metadatos del host y de todos los contenedores | Endpoint solo localhost; reducir montajes si no se usan todas las métricas |
+| 7 | Healthchecks solo en `sandbox-api` | Medio: compose no detecta servicios caídos | Agregar healthchecks básicos (Patroni REST /health, app /api/health) |
+| 8 | Límites de recursos solo en cadvisor y grafana | Medio: un contenedor puede agotar CPU/RAM del host | `mem_limit`/`cpus` gradual por servicio |
+| 9 | `no-new-privileges` + `cap_drop` solo en backend/frontend | Bajo: resto del stack con capacidades por defecto | Extender `cap_drop ALL` + `no-new-privileges` donde sea viable |
+| 10 | Credenciales en variables de entorno (exporters `DATA_SOURCE_NAME`, pgAdmin, nodos) | Bajo: visibles con `docker inspect` | Docker secrets si se migra a Swarm; aceptado en compose |
+| 11 | HAProxy stats `:7000` sin autenticación | Bajo: topología interna visible desde localhost | Bind ya es 127.0.0.1; agregar `stats auth` si se quiere |
+| 12 | Servicio `backup` es `sleep infinity` con credenciales admin | Bajo: sugiere ejecución manual del respaldo | Documentar el procedimiento real usado en la restauración ya probada |
+| 13 | `sandbox-certs` corre como `user: '0:0'` | Bajo: one-shot de bootstrap que finaliza | Aceptable; revisar si puede bajar privilegios |
+
+**Verificado correcto:** todos los puertos publicados están en `127.0.0.1`,
+la publicación externa depende solo del túnel saliente, las redes separan el
+clúster de datos (`red-patroni`) del plano de aplicación (`redtpfinal`) y el
+backend/frontend tienen `cap_drop ALL` + `no-new-privileges`.
+
+**Prioridad propuesta:** 2 (env acotado a n8n) y 4 (restart policies) son de
+aplicación inmediata y bajo riesgo; 3, 7 y 8 en una iteración de hardening;
+el resto queda como riesgo aceptado documentado.
+
 ### H24-SEC-01: secretos en historial Git (Gitleaks 8.30.1)
 
 **Estado: ejecutado el 19/11/2026 — sin secretos reales encontrados.**
