@@ -13,7 +13,7 @@ jobs:
       - name: Actualizar y Desplegar
         run: |
           # TODO: Reemplazar esta ruta por la carpeta del proyecto en la PC que haga de servidor el día de la defensa
-          cd "C:\Users\lucas\OneDrive\Desktop\APU2026 LUCAS\HIA2026\TP_Final_HIA_Grupo13" 
+          cd "C:\Users\Abigail\Documents\3° APU\HI Avanzadas\TP_Final_HIA_Grupo13" 
           # TODO: Cambiar "develop" por "main" junto con la rama de arriba en la versión final
           git pull origin develop
           docker compose up -d --build
