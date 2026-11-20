@@ -28,6 +28,15 @@ def analizar_rendimiento(payload: SolicitudAnalisis):
         if not s.valores:
             continue
 
+        # Detectar nodo/exporter caído (marcador -1 enviado por n8n)
+        if s.valores == [-1]:
+            anomalias_count += 1
+            estado_global = "CRITICO"
+            detalles.append(
+                f"- **[CAÍDO] {s.metrica}** en `{s.instancia}`: **SIN RESPUESTA** — *Exporter o nodo apagado*"
+            )
+            continue
+
         actual = s.valores[-1]
         promedio = statistics.mean(s.valores)
         maximo = max(s.valores)

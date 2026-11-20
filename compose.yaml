@@ -160,14 +160,22 @@ services:
     image: prom/alertmanager:v0.30.0
     container_name: alertmanager
     restart: unless-stopped
+    environment:
+      N8N_WEBHOOK_ALERTS_USER: ${N8N_WEBHOOK_ALERTS_USER}
+      N8N_WEBHOOK_ALERTS_PASS: ${N8N_WEBHOOK_ALERTS_PASS}
     ports:
       - "127.0.0.1:9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
       - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sed -e "s|\$${N8N_WEBHOOK_ALERTS_USER}|$$N8N_WEBHOOK_ALERTS_USER|g" \
+            -e "s|\$${N8N_WEBHOOK_ALERTS_PASS}|$$N8N_WEBHOOK_ALERTS_PASS|g" \
+            /etc/alertmanager/alertmanager.yml.tpl > /tmp/alertmanager.yml && \
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     networks:
       - redtpfinal
 
