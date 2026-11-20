@@ -33,7 +33,7 @@ groups:
 
       # 4. CPU del host monitoreado por Node Exporter
       - alert: HostHighCpuUsage
-        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 85
+        expr: (rate(container_cpu_usage_seconds_total{name!=""}[1m]) * 100) > 85
         for: 2m
         labels:
           severity: warning
@@ -43,7 +43,7 @@ groups:
 
       # 5. Memoria del host monitoreado por Node Exporter
       - alert: HostLowMemory
-        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
+        expr: (container_memory_usage_bytes{name!=""} / (1024*1024*1024)) > 1
         for: 1m
         labels:
           severity: warning
