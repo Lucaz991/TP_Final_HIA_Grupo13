@@ -848,7 +848,7 @@
       },
       "targets": [
         {
-          "expr": "changes(container_start_time_seconds{name!=\"\"}[1h])",
+          "expr": "resets(container_cpu_user_seconds_total{name!=\"\"}[1h])",
           "legendFormat": "Reinicios: {{name}}",
           "refId": "A"
         }
