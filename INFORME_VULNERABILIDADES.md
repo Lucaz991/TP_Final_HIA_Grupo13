@@ -227,59 +227,72 @@ positivos en futuras pruebas.
 
 ### H24-MP-01: webhook y preferencias de Mercado Pago
 
-**Estado: corregido en rama de fix y verificado con simulador local; despliegue y configuración del proveedor pendientes.**
-**Severidad: crítica.** La integración original combinaba tres defectos:
+**Estado actualizado 20/11/2026 tras el merge de develop: la implementación
+del equipo se conserva íntegra y se le agregó SOLO la verificación de firma
+HMAC en el controller (cambio aditivo). Verificado con simulador local.**
 
-- El webhook exigía JWT, un modelo incompatible con las notificaciones de Mercado
-  Pago, y no validaba la firma HMAC enviada por el proveedor.
-- La creación de preferencias aceptaba un ID ambiguo: primero intentaba resolver
-  una respuesta de ayuda y luego una tutoría. Cualquier usuario autenticado podía
-  generar una preferencia sobre el recurso de otro pagador.
-- `notification_url` estaba hardcodeada a una URL temporal de ngrok y el proceso
-  esperaba la respuesta del proveedor antes de confirmar la notificación.
+**Implementación vigente (develop):**
 
-**Corrección verificada:**
+- `POST /api/mercadopago/crear-preferencia` con JWT: recibe `respuestaId` y el
+  servicio resuelve la entidad intentando `Tutoria` primero y `RespuestaAyuda`
+  después. El importe sale del modelo del servidor (correcto).
+- `POST /api/mercadopago/webhook` público: `procesarWebhook` consulta el pago
+  a la API de Mercado Pago por `data.id` (verificación server-side del estado,
+  no confía en el body), exige `approved` y marca `pagada` según
+  `external_reference`.
 
-- El webhook quedó público y autenticado con `x-signature` + `x-request-id`:
-  manifiesto `id:<data.id>;request-id:<id>;ts:<ts>;`, HMAC-SHA256,
-  comparación en tiempo constante y tolerancia de 5 minutos. Devuelve **400**
-  ante headers ausentes/mal formados, **401** ante firma inválida o timestamp
-  expirado y **503** si falta `MP_WEBHOOK_SECRET`.
-- El endpoint de preferencias ahora exige `tipo` (`ayuda` o `tutoria`) e
-  `entidadId`. Para ayuda, el pagador es el propietario de la solicitud; para
-  tutoría, el `alumnoId`. Solo ese pagador o admin puede iniciar el checkout.
-- Se rechazan respuestas no aceptadas, tutorías en estados no pagables y
-  recursos ya marcados como pagados. El importe se toma exclusivamente del
-  modelo del servidor, no del `precio` enviado por el cliente.
-- `MERCADOPAGO_NOTIFICATION_URL` reemplaza la URL temporal. En producción debe
-  configurarse con el dominio HTTPS final; en el laboratorio apunta al backend
-  interno y el adaptador se reemplaza por un simulador.
-- Tras validar la firma, el endpoint responde **200** y procesa la notificación
-  en segundo plano. El servicio consulta el pago al proveedor, exige estado
-  `approved`, referencia externa estricta `ayuda|tutoria:<id>`, moneda ARS e
-  importe coincidente. Si la entidad conserva `preferenceId`, también lo
-  compara con el pago. Repetir el mismo `paymentId` no duplica la actualización.
-- Se corrigió el helper de auditoría para no fallar cuando el evento proviene
-  del webhook y no tiene `req.body`; el actor auditado es el pagador real.
+**Corrección aplicada encima (aditiva, sin tocar service ni rutas):**
 
-Comando y resultado:
+- `validarFirmaWebhook` en el controller: manifiesto
+  `id:<data.id>;request-id:<id>;ts:<ts>;`, HMAC-SHA256 con
+  `MP_WEBHOOK_SECRET`, comparación en tiempo constante y tolerancia de
+  ±5 minutos. Responde **400** ante headers ausentes/malformados, **401**
+  ante firma inválida o timestamp viejo, **503** si falta el secreto.
+- Justificación para el equipo: sin firma, cualquier cliente puede enviar un
+  `payment id` y forzar una llamada a la API de MP por request (consumo de
+  cuota), además de que MP documenta la firma como control de producción. El
+  secreto se configura en el panel de desarrolladores de MP y en
+  `MP_WEBHOOK_SECRET` del `.env` — **requisito funcional**: sin ambos, el
+  webhook responde 503/400 y los pagos dejan de confirmarse.
 
-```powershell
-python security-test/verify.py --mercadopago
+**Brechas restantes (documentadas, no modificadas para respetar la
+implementación del equipo):**
+
+| Brecha | Impacto | Recomendación al equipo |
+|---|---|---|
+| Sin chequeo de propietario en `crearPreferencia` | Un usuario autenticado puede generar el checkout de la entidad de otro (el pagador es quien paga, pero expone IDs e importes ajenos) | Verificar que el solicitante sea el pagador esperado |
+| Resolución Tutoria→RespuestaAyuda sin `tipo` explícito | Si ambos PK colisionan, se cobra la entidad equivocada | Exigir `tipo` en el body o prefijo en el id |
+| `notification_url` con ngrok hardcodeado | Si el túnel expira, las notificaciones no llegan | Usar `MERCADOPAGO_NOTIFICATION_URL` del `.env` |
+| `respuestaId` sin validación de formato | IDs no numéricos/inexistentes devuelven 500 | 400/404 respectivamente (cubierto parcialmente por `validarParamIds` solo en path params, no en body) |
+| Sin idempotencia ni procesamiento async | Reintentos re-auditan el mismo pago; la API espera la llamada a MP | Flag `pagada` + `paymentId` existente, responder 200 antes de procesar |
+
+**Prueba en laboratorio (`verify.py --mercadopago`, simulador local): 11/11**
+
+```text
+sin token → 401 · preferencia propia/ajena → 200 (brecha documentada)
+ID inexistente/no numérico → 500 (brecha documentada)
+webhook sin firma → 400 · firma incompleta → 400
+firma inválida → 401 · timestamp expirado → 401
+webhook firmado → 200 procesado (y reintento → 200)
 ```
 
-**13/13 casos aprobaron** sobre el commit `fff1c8ae` y la imagen
-`sha256:1396ad19a33f...`: preferencia sin token **401**, compra de recursos
-ajenos **403**, preferencias propias **200** contra el simulador, tipo/ID
-inválidos **400**, webhook sin firma/mal formado **400**, firma inválida o
-expirada **401**, y webhook firmado sin JWT **200** procesado localmente.
-Evidencia: `security-test/mercadopago-results.json`.
+**Nota de merge (20/11/2026):** al fusionar `develop`, el auto-merge aplicó
+la versión remota de `getTutorias` (sin filtro por participante) descartando
+la corrección BOLA de esta rama **sin reportar conflicto**. Se restauró el
+listado filtrado por `alumnoId`/`profesorId` con paginación. Lección: tras
+cada merge hay que auditar los puntos corregidos por seguridad, no solo los
+conflictos explícitos. El resto de los controles (trust proxy,
+validarParamIds, chat limiter, login uniforme, auth de los demás
+controladores) se verificó intacto post-merge.
 
-**Límite:** el laboratorio no contiene `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY` ni el
-secreto real, y no contacta a Mercado Pago. La prueba valida el contrato HTTP,
-autorización del pagador y la lógica HMAC del backend contra un cliente
-simulado; falta validar el secreto real y una notificación real en el ambiente
-publicado.
+**GitGuardian:** marca `MP_WEBHOOK_SECRET: h24-webhook-secret` en
+`compose.security-test.yaml` como "Generic Password". Es un valor centinela
+sintético del laboratorio aislado (firma webhooks simulados dentro de una
+red `internal: true`), no una credencial real — se resuelve marcando el
+incidente como "test credential" en el dashboard de GitGuardian.
+
+**Límite:** falta validar el secreto real y una notificación real del
+proveedor en el ambiente publicado.
 
 ### H24-IA-01: chatbot con datos ajenos, sin límites y con inyección indirecta
 

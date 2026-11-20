@@ -161,12 +161,14 @@ const assert = require('node:assert/strict');
   assert.equal((await calendar.cancelarTutoria(event.idEvento)).exito, true);
   const payments = require('./src/services/mercadoPago.service');
   const ai = require('./src/services/ai.service');
-  const preference = await payments.crearPreferencia({
-    tipo: 'tutoria', entidad: {id: 'verify'}
-  });
-  assert.equal(preference.init_point, 'http://127.0.0.1:9081/pago-simulado?tipo=tutoria&id=verify');
+  const db = require('./config/database');
+  const Tutoria = require('./src/models/tutoria.model');
+  const tutoria = await Tutoria.findOne();
+  const preference = await payments.crearPreferencia(tutoria.id);
+  assert.ok(preference.init_point.startsWith('http://127.0.0.1:9081/pago-simulado?tipo=tutoria&id='));
   assert.equal((await payments.procesarWebhook({data:{id:'verify'}})).processed, true);
   await assert.rejects(ai.getResponse('', ''), /deshabilitada/);
+  await db.close();
 })().catch(() => {process.exitCode = 1;});
 """)
     print("OK Calendar simulado y adaptadores sin llamadas externas")
