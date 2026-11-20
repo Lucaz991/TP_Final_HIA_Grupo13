@@ -949,7 +949,7 @@
       },
       "targets": [
         {
-          "expr": "count(pg_stat_replication_pg_current_wal_lsn_bytes{job=\"postgres-cluster-nodes\"})",
+          "expr": "count(pg_stat_replication_pg_current_wal_lsn_bytes{job=\"postgres-cluster-nodes\"}) or vector(0)",
           "legendFormat": "Réplicas Conectadas al Líder",
           "refId": "A"
         }
