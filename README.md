@@ -22,7 +22,24 @@ El proyecto se despliega a través de un único archivo compose.yaml que orquest
 4. **Gestión y Ops:** Nextcloud (documentos), GLPI (incidencias) y n8n (automatización con IA).
 5. **Seguridad Perimetral:** Cloudflare Tunnel (cloudflared) para acceso externo seguro mediante subdominios.
 
----
+## Entornos de Ejecución (Desarrollo vs. Despliegue)
+
+El proyecto separa las configuraciones de contenedores para trabajar localmente en desarrollo sin afectar el despliegue de producción:
+
+| Entorno | Archivos utilizados | Frontend | Backend |
+| :--- | :--- | :--- | :--- |
+| **Despliegue (Producción)** | `compose.yaml`, `backend/Dockerfile`, `frontend/Dockerfile` | Build estático en Nginx (puerto `8081`) | `npm start` (puerto `3000`) |
+| **Desarrollo** | `compose.yaml` + `compose.dev.yaml`, `backend/Dockerfile.dev`, `frontend/Dockerfile.dev` | Angular Dev Server con *Hot Reload* (`http://localhost:4200`) | `node --watch index.js` con recarga automática (puerto `3000`) |
+
+### Levantar en modo Desarrollo
+
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build etcd node1 node2 node3 proxy backend frontend
+
+### Levantar en modo Despliegue (Producción)
+
+docker compose up -d --build
+
+
 
 ## Ejecución del Proyecto (Entorno de Producción)
 

@@ -141,6 +141,7 @@ finally {
     Write-Host "Registro: $registro"
 
     # --- ENVIAR RESULTADO A N8N ---
+
     $webhookUrl = $env:BACKUP_HOST_WEBHOOK_URL
     if (-not $webhookUrl) {
         $webhookUrl = 'http://localhost:5678/webhook/backup-verificacion'
