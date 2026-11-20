@@ -6,6 +6,11 @@ const registrarAuditoria = require("../helpers/auditoria.helper");
 
 const usuarioCtrl = {};
 
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+
+const puedeGestionarUsuario = (usuario, id) =>
+    usuario.rol === 'admin' || usuario.id === Number(id);
+
 usuarioCtrl.getUsuarios = async (req, res) => {
     /* #swagger.tags = ['Usuarios']
        #swagger.summary = 'Listar usuarios o profesores'
@@ -122,38 +127,24 @@ usuarioCtrl.updateUsuario = async (req, res) => {
         const { id } = req.params;
         const data = req.body;
 
+        const usuarioActual = await getUsuarioActual(req);
         const usuario = await Usuario.findByPk(id);
         if (!usuario) {
             return res.status(404).json({ status: '0', msg: 'Usuario no encontrado.' });
         }
-
-        await usuario.update({
-            nombre: data.nombre,
-            apellido: data.apellido,
-            ubicacion: data.ubicacion,
-            universidad: data.universidad,
-            carrera: data.carrera,
-            nivelAcademico: data.nivelAcademico,
-            biografia: data.biografia,
-            tarifaBase: data.tarifaBase
-        });
-
-        if (usuario.rol === 'profesor' && data.perfilProfesor) {
-            const [perfil] = await PerfilProfesor.findOrCreate({
-                where: { usuarioId: id },
-                defaults: { primario: false, secundario: false, universitario: false, doctorado: false }
-            });
-            await perfil.update({
-                primario: !!data.perfilProfesor.primario,
-                secundario: !!data.perfilProfesor.secundario,
-                universitario: !!data.perfilProfesor.universitario,
-                doctorado: !!data.perfilProfesor.doctorado
-            });
+        if (!usuarioActual || !puedeGestionarUsuario(usuarioActual, id)) {
+            return res.status(403).json({ status: '0', msg: 'Solo puede actualizar su propio perfil.' });
         }
+
+        const cambios = {};
+        for (const campo of ['nombre', 'apellido', 'ubicacion', 'universidad', 'carrera',
+            'nivelAcademico', 'biografia', 'tarifaBase']) {
+            if (data[campo] !== undefined) cambios[campo] = data[campo];
+        }
+        await usuario.update(cambios);
 
         const usuarioActualizado = await Usuario.findByPk(id, {
             include: [
-                { model: PerfilProfesor, as: 'perfilProfesor' },
                 { model: Categoria, as: 'categoriasEnseniadas', attributes: ['id', 'nombre'], through: { attributes: [] } },
                 { model: HorarioDisponible, as: 'horarios' }
             ]
@@ -192,12 +183,23 @@ usuarioCtrl.addHorario = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al agregar horario.' }
     */
     try {
-        const { usuarioId, diaSemana, horaInicio, horaFin } = req.body;
+        const usuario = await getUsuarioActual(req);
+        const profesorId = Number(req.body.usuarioId || req.body.profesorId);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && (usuario.rol !== 'profesor' || profesorId !== usuario.id)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede agregar horarios a su propio perfil de profesor.' });
+        }
+        const profesor = await Usuario.findOne({ where: { id: profesorId, rol: 'profesor' } });
+        if (!profesor) return res.status(400).json({ status: 0, msg: 'Profesor inválido.' });
+
+        const { diaSemana, horaInicio, horaFin } = req.body;
         const nuevo = await HorarioDisponible.create({
-            profesorId: usuarioId,
+            profesorId: profesorId,
             diaSemana: diaSemana,
             horaInicio: horaInicio,
-            horaFin: horaFin
+            horaFin: horaFin,
+            modalidad: req.body.modalidad || 'ambas',
+            estado: 'activo'
         });
         await registrarAuditoria(
             req,
@@ -205,7 +207,7 @@ usuarioCtrl.addHorario = async (req, res) => {
             "HorarioDisponible",
             nuevo.id,
             `Agregó un horario (${diaSemana} ${horaInicio}-${horaFin})`,
-            usuarioId
+            profesorId
         );
         res.json({ status: 1, msg: 'Horario agregado correctamente', data: nuevo });
     } catch (error) {
@@ -232,6 +234,14 @@ usuarioCtrl.deleteHorario = async (req, res) => {
     */
     try {
         const { id } = req.params;
+        const horario = await HorarioDisponible.findByPk(id);
+        if (!horario) return res.status(404).json({ status: 0, msg: 'Horario no encontrado.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && horario.profesorId !== usuario.id) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede eliminar sus propios horarios.' });
+        }
+
         await HorarioDisponible.destroy({ where: { id } });
         await registrarAuditoria(
             req,

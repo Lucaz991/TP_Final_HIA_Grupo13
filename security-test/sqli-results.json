@@ -1,0 +1,305 @@
+{
+  "timestamp_utc": "2026-11-18T23:11:33.801029+00:00",
+  "source_commit": "967f13d9c212f4ee265bcaeefb32d1845112bf2f",
+  "backend_image": "sha256:7139bcc87ea79c0a1569992fbd1dde37aabb934234dd8453a634b232e0bd5a3b",
+  "target": "http://127.0.0.1:9081",
+  "scope": "probes controlados de error, booleano, UNION y tiempo; sin DROP/UPDATE/DELETE",
+  "results": [
+    {
+      "case": "SQLi ruta categoria publica",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 13,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categoria publica",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 8,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categoria publica",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 7,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categoria publica",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 7,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categorias de profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categorias de profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 32,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categorias de profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 9,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta categorias de profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 8,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 18,
+      "passed": true,
+      "observation": "tiempo 0.02s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 29,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 14,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 13,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta solicitud",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 18,
+      "passed": true,
+      "observation": "tiempo 0.02s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta solicitud",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 20,
+      "passed": true,
+      "observation": "tiempo 0.02s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta solicitud",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 12,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta solicitud",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 44,
+      "passed": true,
+      "observation": "tiempo 0.04s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta horario profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 50,
+      "passed": true,
+      "observation": "tiempo 0.05s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta horario profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 21,
+      "passed": true,
+      "observation": "tiempo 0.02s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta horario profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta horario profesor",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta calificacion tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 14,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta calificacion tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 33,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta calificacion tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 33,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi ruta calificacion tutoria",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 500,
+      "elapsed_ms": 17,
+      "passed": true,
+      "observation": "tiempo 0.02s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.id",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 9,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.categoriaId",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 27,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.lat",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 29,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.lng",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.page",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 9,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query usuario.limit",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query tutoria.page",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 9,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query tutoria.limit",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 10,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi query admin.limit",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 400,
+      "elapsed_ms": 15,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "SQLi search admin.users",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 200,
+      "elapsed_ms": 54,
+      "passed": true,
+      "observation": "tiempo 0.05s; app_status=1"
+    },
+    {
+      "case": "SQLi search admin.full-tutorials",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 200,
+      "elapsed_ms": 27,
+      "passed": true,
+      "observation": "tiempo 0.03s; app_status=1"
+    },
+    {
+      "case": "SQLi login email",
+      "expected": "sin ejecución SQL ni exposición",
+      "http_status": 200,
+      "elapsed_ms": 11,
+      "passed": true,
+      "observation": "tiempo 0.01s; app_status=0"
+    },
+    {
+      "case": "Integridad de tablas",
+      "expected": "sin cambios en filas",
+      "http_status": 0,
+      "elapsed_ms": 0,
+      "passed": true,
+      "observation": "antes={'usuarios': '5', 'tutorias': '4', 'categorias': '1', 'horarios': '2', 'solicitudes': '3', 'respuestas': '2', 'calificaciones': '2'}; despues={'usuarios': '5', 'tutorias': '4', 'categorias': '1', 'horarios': '2', 'solicitudes': '3', 'respuestas': '2', 'calificaciones': '2'}"
+    }
+  ]
+}

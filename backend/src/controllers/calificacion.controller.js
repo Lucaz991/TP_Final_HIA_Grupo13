@@ -1,7 +1,12 @@
 const Calificacion = require('../models/calificacion.model');
 const Tutoria = require('../models/tutoria.model');
+const Usuario = require('../models/usuario.model');
 
 const calificacionCtrl = {};
+
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+const puedeAccederTutoria = (usuario, tutoria) =>
+    usuario.rol === 'admin' || usuario.id === tutoria.alumnoId || usuario.id === tutoria.profesorId;
 
 calificacionCtrl.crearCalificacion = async (req, res) => {
     /* #swagger.tags = ['Calificaciones']
@@ -29,9 +34,14 @@ calificacionCtrl.crearCalificacion = async (req, res) => {
             return res.status(400).json({ status: 0, msg: 'La tutoría y la calificación son obligatorias.' });
         }
 
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
         const tutoria = await Tutoria.findByPk(tutoriaId);
         if (!tutoria) {
             return res.status(404).json({ status: 0, msg: 'Tutoría no encontrada.' });
+        }
+        if (usuario.rol !== 'alumno' || usuario.id !== tutoria.alumnoId) {
+            return res.status(403).json({ status: 0, msg: 'Solo el alumno de la tutoría puede calificarla.' });
         }
 
         if (tutoria.estado !== 'finalizada' && tutoria.estado !== 'completada') {
@@ -73,6 +83,13 @@ calificacionCtrl.obtenerCalificacionPorTutoria = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al obtener calificación.' }
     */
     try {
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        const tutoria = await Tutoria.findByPk(req.params.tutoriaId);
+        if (!tutoria) return res.status(404).json({ status: 0, msg: 'Tutoría no encontrada.' });
+        if (!puedeAccederTutoria(usuario, tutoria)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para ver esta calificación.' });
+        }
         const rating = await Calificacion.findOne({ where: { tutoriaId: req.params.tutoriaId } });
         res.json({ status: 1, data: rating });
     } catch (error) {

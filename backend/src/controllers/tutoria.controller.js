@@ -5,9 +5,15 @@ const Calificacion = require('../models/calificacion.model');
 const registrarAuditoria = require("../helpers/auditoria.helper");
 const googleCalendarService = require('../services/google-calendar.service');
 const sanitizeHtml = require('sanitize-html');
+const { Op } = require('sequelize');
 
 const tutoriaCtrl = {};
 const solicitudCtrl = {};
+
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+
+const puedeAccederTutoria = (usuario, tutoria) =>
+    usuario.rol === 'admin' || usuario.id === tutoria.alumnoId || usuario.id === tutoria.profesorId;
 
 solicitudCtrl.createSolicitud = async (req, res) => {
     try {
@@ -46,16 +52,26 @@ module.exports = solicitudCtrl;
 
 tutoriaCtrl.getTutorias = async (req, res) => {
     /* #swagger.tags = ['Tutorias']
-       #swagger.summary = 'Listar todas las tutorías'
-       #swagger.description = 'Obtiene el listado completo de todas las tutorías registradas, incluyendo información del alumno, profesor, categoría y calificación.'
+       #swagger.summary = 'Listar una página de tutorías del usuario autenticado'
+       #swagger.description = 'Obtiene hasta 100 tutorías del usuario autenticado, incluyendo información del alumno, profesor, categoría y calificación.'
        #swagger.responses[200] = {
            description: 'Listado obtenido con éxito.',
            schema: { $ref: '#/definitions/TutoriaResponse' }
        }
        #swagger.responses[500] = { description: 'Error del servidor.' }
     */
+    const page = Number(req.query.page || 1), limit = Number(req.query.limit || 50);
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit > 100
+        || !Number.isSafeInteger((page - 1) * limit)) {
+        return res.status(400).json({ status: 0, msg: 'Paginación inválida.' });
+    }
+    if (!req.userId) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
     try {
-        const tutorias = await Tutoria.findAll({
+        // Filtrar por el usuario del JWT antes de consultar; nunca descargar el dataset global.
+        const where = { [Op.or]: [{ alumnoId: req.userId }, { profesorId: req.userId }] };
+        const total = await Tutoria.count({ where });
+        const tutorias = await Tutoria.findAll({ where, limit, offset: (page - 1) * limit, subQuery: true,
+            order: [['createdAt', 'DESC'], ['id', 'DESC']],
             include: [
                 { model: Usuario, as: 'alumno', attributes: ['id', 'nombre', 'apellido', 'email'] },
                 { model: Usuario, as: 'profesor', attributes: ['id', 'nombre', 'apellido', 'email'] },
@@ -63,9 +79,10 @@ tutoriaCtrl.getTutorias = async (req, res) => {
                 { model: Calificacion, as: 'calificacion' }
             ]
         });
-        if (!tutorias) return res.json({ status: 0, msg: 'Tutoría no encontrada' });
-        res.json({ status: 1, msg: 'success', data: tutorias });
+        res.json({ status: 1, msg: 'success', data: tutorias,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ status: 0, msg: 'Error al obtener tutorías' });
     }
 };
@@ -97,7 +114,14 @@ tutoriaCtrl.getTutoria = async (req, res) => {
                 { model: Calificacion, as: 'calificacion' }
             ]
         });
-        if (!tutoria) return res.json({ status: 0, msg: 'Tutoría no encontrada' });
+        if (!tutoria) return res.status(404).json({ status: 0, msg: 'Tutoría no encontrada' });
+
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!puedeAccederTutoria(usuario, tutoria)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para acceder a esta tutoría.' });
+        }
+
         res.json({ status: 1, msg: 'success', data: tutoria });
     } catch (error) {
         res.status(500).json({ status: 0, msg: 'Error al obtener tutoría' });
@@ -124,6 +148,12 @@ tutoriaCtrl.createTutoria = async (req, res) => {
        #swagger.responses[500] = { description: 'Error del servidor.' }
     */
     try {
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && (usuario.rol !== 'alumno' || Number(req.body.alumnoId) !== usuario.id)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede crear tutorías para su propio usuario.' });
+        }
+
         const alumno = await Usuario.findOne({ where: { id: req.body.alumnoId, rol: 'alumno' } });
         const profesor = await Usuario.findOne({ where: { id: req.body.profesorId, rol: 'profesor' } });
 
@@ -139,7 +169,7 @@ tutoriaCtrl.createTutoria = async (req, res) => {
             precioAcordado: req.body.precioAcordado,
             mensaje: req.body.mensaje,
             fechaHora: req.body.fechaHora,
-            estado: req.body.estado || 'pendiente'
+            estado: 'pendiente'
         });
         await registrarAuditoria(
                 req,
@@ -186,8 +216,25 @@ tutoriaCtrl.editTutoria = async (req, res) => {
             return res.status(404).json({ status: 0, msg: 'Tutoría no encontrada.' });
         }
 
-        const alumno = await Usuario.findOne({ where: { id: req.body.alumnoId || tutoriaExistente.alumnoId, rol: 'alumno' } });
-        const profesor = await Usuario.findOne({ where: { id: req.body.profesorId || tutoriaExistente.profesorId, rol: 'profesor' } });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!puedeAccederTutoria(usuario, tutoriaExistente)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para actualizar esta tutoría.' });
+        }
+
+        const cambiaAlumno = req.body.alumnoId !== undefined && Number(req.body.alumnoId) !== tutoriaExistente.alumnoId;
+        const cambiaProfesor = req.body.profesorId !== undefined && Number(req.body.profesorId) !== tutoriaExistente.profesorId;
+        if (cambiaAlumno || cambiaProfesor) {
+            return res.status(403).json({ status: 0, msg: 'No se permite reasignar los participantes de la tutoría.' });
+        }
+
+        const estado = req.body.estado || tutoriaExistente.estado;
+        if (estado !== tutoriaExistente.estado && !['profesor', 'admin'].includes(usuario.rol)) {
+            return res.status(403).json({ status: 0, msg: 'Solo el profesor puede cambiar el estado de la tutoría.' });
+        }
+
+        const alumno = await Usuario.findOne({ where: { id: tutoriaExistente.alumnoId, rol: 'alumno' } });
+        const profesor = await Usuario.findOne({ where: { id: tutoriaExistente.profesorId, rol: 'profesor' } });
         const categoria = await Categoria.findOne({ where: { id: req.body.categoriaId || tutoriaExistente.categoriaId } });
 
         if (!alumno || !profesor) {
@@ -206,10 +253,10 @@ tutoriaCtrl.editTutoria = async (req, res) => {
         const mensaje = req.body.mensaje !== undefined ? req.body.mensaje : tutoriaExistente.mensaje;
         const fechaHora = req.body.fechaHora || tutoriaExistente.fechaHora;
 
-        let enlaceMeet = req.body.enlaceMeet || tutoriaExistente.enlaceMeet || null;
-        let eventId = req.body.googleEventId || tutoriaExistente.googleEventId || null;
+        let enlaceMeet = tutoriaExistente.enlaceMeet || null;
+        let eventId = tutoriaExistente.googleEventId || null;
 
-        if (req.body.estado === 'aceptada') {
+        if (estado === 'aceptada') {
             try {
                 const googleData = await googleCalendarService.agendarTutoria(
                     {
@@ -240,20 +287,20 @@ tutoriaCtrl.editTutoria = async (req, res) => {
         }
 
         await Tutoria.update({
-            alumnoId: req.body.alumnoId || tutoriaExistente.alumnoId,
-            profesorId: req.body.profesorId || tutoriaExistente.profesorId,
+            alumnoId: tutoriaExistente.alumnoId,
+            profesorId: tutoriaExistente.profesorId,
             categoriaId: req.body.categoriaId || tutoriaExistente.categoriaId,
             modalidad: modalidad,
             precioAcordado: precioAcordado,
             mensaje: mensaje,
             fechaHora: fechaHora,
-            estado: req.body.estado,
+            estado: estado,
             enlaceMeet: enlaceMeet,
             googleEventId: eventId
         }, { where: { id: req.params.id } });
             let descripcion = "Actualizó una tutoría";
 
-            switch(req.body.estado){
+            switch(estado){
 
                 case "aceptada":
                     descripcion =
@@ -305,6 +352,16 @@ tutoriaCtrl.deleteTutoria = async (req, res) => {
        #swagger.responses[500] = { description: 'Error del servidor.' }
     */
     try {
+        const tutoria = await Tutoria.findByPk(req.params.id);
+        if (!tutoria) {
+            return res.status(404).json({ status: 0, msg: 'Tutoría no encontrada.' });
+        }
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!puedeAccederTutoria(usuario, tutoria)) {
+            return res.status(403).json({ status: 0, msg: 'No tiene permiso para eliminar esta tutoría.' });
+        }
+
         await Tutoria.destroy({ where: { id: req.params.id } });
         await registrarAuditoria(
             req,

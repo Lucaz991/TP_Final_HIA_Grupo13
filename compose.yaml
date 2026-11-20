@@ -224,8 +224,8 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:?Completar en .env - no usar admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Completar en .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -297,6 +297,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET}
+      MERCADOPAGO_NOTIFICATION_URL: ${MERCADOPAGO_NOTIFICATION_URL}
       GROQ_API_KEY: ${GROQ_API_KEY}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -485,12 +487,16 @@ services:
   # 9. BACKUP DE LA BASE DE DATOS
   # ==========================================
   backup:
-    image: postgres:18
+    build: ./db/backup
     restart: unless-stopped
-    entrypoint: ["sleep", "infinity"]
     environment:
+      TZ: America/Argentina/Jujuy
       DB_ADMIN_USER: ${DB_ADMIN_USER}
       DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      BACKUP_SCHEDULE: "${BACKUP_SCHEDULE:-0 3 * * *}"
+      BACKUP_WEBHOOK_URL: "${BACKUP_WEBHOOK_URL:-http://n8n:5678/webhook/backup-verificacion}"
+    volumes:
+      - "${BACKUP_DIR:-../Respaldos}:/backups"
     networks:
       - redtpfinal
 

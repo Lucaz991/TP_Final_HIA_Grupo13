@@ -15,10 +15,10 @@ El procedimiento oficial es utilizar `git revert`, el cual crea un nuevo commit 
 
 **Prueba de concepto realizada:**
 * Captura 1: Se detectó un commit con un error crítico introducido en el archivo de orquestación.
-![Error simulado](assets/captura1.png)
+![Error simulado](https://raw.githubusercontent.com/Lucaz991/TP_Final_HIA_Grupo13/develop/assets/captura1.png)
 
 * Captura 2: Se aplicó `git revert` exitosamente, restaurando la estabilidad sin borrar el historial.
-![Reversión exitosa](assets/captura2.png)
+![Reversión exitosa](https://raw.githubusercontent.com/Lucaz991/TP_Final_HIA_Grupo13/develop/assets/captura2.png)
 
 ---
 
@@ -34,4 +34,4 @@ Si una nueva imagen de contenedor falla en el entorno de producción, el mecanis
 
 ## 3. Rollback de Base de Datos
 Para fallos catastróficos a nivel de datos (ej. pérdida de registros o tablas), el clúster Patroni se apoya en backups automatizados y replicación. 
-* **Procedimiento:** Detener el tráfico entrante desde el HAProxy (`docker compose stop haproxy`), restaurar el volumen principal de PostgreSQL desde el último snapshot válido, y reiniciar los nodos para que Patroni sincronice la versión sana.
+* **Procedimiento:** Detener el tráfico entrante desde el HAProxy (`docker compose stop proxy`), restaurar el volumen principal de PostgreSQL desde el último snapshot válido, y reiniciar los nodos para que Patroni sincronice la versión sana.

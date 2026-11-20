@@ -1,0 +1,87 @@
+{
+  "timestamp_utc": "2026-11-20T01:59:11.636036+00:00",
+  "source_commit": "7dd8e77bbf2978ea8332327824c63d8e41d73aa0",
+  "backend_image": "sha256:bc35db4a3f35335c8ef7e60cca073609e58d0689d25455485051077a07ec89c6",
+  "target": "http://127.0.0.1:9081",
+  "scope": "autorizacion de preferencia y validacion HMAC local; sin llamadas a Mercado Pago",
+  "fixtures_cleaned": true,
+  "results": [
+    {
+      "case": "Sin token crea preferencia",
+      "expected": "401; control de autenticacion",
+      "http_status": 401,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "A crea preferencia sobre respuesta de B",
+      "expected": "200; sin chequeo de propietario (brecha documentada)",
+      "http_status": 200,
+      "passed": true,
+      "observation": "http://127.0.0.1:9081/pago-simulado?tipo=ayuda&id=20"
+    },
+    {
+      "case": "B crea preferencia de su respuesta",
+      "expected": "200; control positivo",
+      "http_status": 200,
+      "passed": true,
+      "observation": "http://127.0.0.1:9081/pago-simulado?tipo=ayuda&id=20"
+    },
+    {
+      "case": "ID inexistente",
+      "expected": "500; entidad inexistente devuelve 500",
+      "http_status": 500,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "ID no numerico",
+      "expected": "500; sin validacion de formato devuelve 500",
+      "http_status": 500,
+      "passed": true,
+      "observation": "sin crear preferencia"
+    },
+    {
+      "case": "Webhook sin firma",
+      "expected": "400 y sin procesar",
+      "http_status": 400,
+      "passed": true,
+      "observation": "headers HMAC ausentes"
+    },
+    {
+      "case": "Webhook con firma incompleta",
+      "expected": "400 y sin procesar",
+      "http_status": 400,
+      "passed": true,
+      "observation": "falta timestamp en x-signature"
+    },
+    {
+      "case": "Webhook con firma invalida",
+      "expected": "401 y sin procesar",
+      "http_status": 401,
+      "passed": true,
+      "observation": "HMAC no coincide"
+    },
+    {
+      "case": "Webhook con timestamp expirado",
+      "expected": "401 y sin procesar",
+      "http_status": 401,
+      "passed": true,
+      "observation": "timestamp fuera de tolerancia"
+    },
+    {
+      "case": "Webhook firmado sin JWT",
+      "expected": "200 y procesamiento local",
+      "http_status": 200,
+      "passed": true,
+      "observation": "simulador ejecutado una vez"
+    },
+    {
+      "case": "Webhook firmado repetido",
+      "expected": "200 sin error",
+      "http_status": 200,
+      "passed": true,
+      "observation": "reintento aceptado; la deduplicacion real queda en el servicio"
+    }
+  ]
+}

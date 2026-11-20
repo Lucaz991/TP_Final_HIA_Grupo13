@@ -1,0 +1,123 @@
+# Ejecutar solo, nunca como override de compose.yaml. Ver security-test/README.md.
+name: hia-security-test
+
+x-backend: &backend
+  image: hia-security-test-backend:local
+  build:
+    context: ./backend
+  environment: &backend-environment
+    NODE_ENV: test
+    SECURITY_TEST_MODE: isolated-h24
+    DB_HOST: database
+    DB_PORT: 5432
+    DB_NAME: h24_security_test
+    DB_USER: h24_app
+    DB_PASSWORD: ${SECURITY_DB_PASSWORD:?Ejecutar security-test/init.ps1}
+    JWT_SECRET: ${SECURITY_JWT_SECRET:?Ejecutar security-test/init.ps1}
+    FRONTEND_URL: http://localhost:9081
+    MP_WEBHOOK_SECRET: h24-webhook-secret
+    MERCADOPAGO_NOTIFICATION_URL: http://backend:3000/api/mercadopago/webhook
+  networks:
+    - isolated
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  mem_limit: 512m
+  cpus: 1
+  pids_limit: 128
+  volumes:
+    - ./security-test:/app/security-test:ro
+    - ./security-test/calendar.cjs:/app/src/services/google-calendar.service.js:ro
+    - ./security-test/mercadoPago.service.cjs:/app/src/services/mercadoPago.service.js:ro
+    - ./security-test/disabled-integrations.cjs:/app/src/services/ai.service.js:ro
+
+services:
+  database:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: h24_security_test
+      POSTGRES_USER: h24_owner
+      POSTGRES_PASSWORD: ${SECURITY_DB_ROOT_PASSWORD:?Ejecutar security-test/init.ps1}
+      SECURITY_DB_PASSWORD: ${SECURITY_DB_PASSWORD:?Ejecutar security-test/init.ps1}
+    volumes:
+      # PostgreSQL 18 usa el volumen padre y su subdirectorio 18/docker.
+      - test_database:/var/lib/postgresql
+      - ./security-test/init-db.sh:/docker-entrypoint-initdb.d/10-h24.sh:ro
+    networks:
+      - isolated
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U h24_owner -d h24_security_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    <<: *backend
+    command: ["node", "security-test/start.cjs"]
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/categoria/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seed:
+    <<: *backend
+    profiles: ["tools"]
+    environment:
+      <<: *backend-environment
+      SECURITY_ACCOUNT_PASSWORD: ${SECURITY_ACCOUNT_PASSWORD:?Ejecutar security-test/init.ps1}
+    command: ["node", "security-test/seed.cjs"]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    image: hia-security-test-frontend:local
+    build:
+      context: ./frontend
+    ports:
+      - "127.0.0.1:9081:80"
+    volumes:
+      - ./security-test/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - entry
+      - isolated
+    depends_on:
+      backend:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/api/categoria/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  # Docker necesita una red no interna para publicar 127.0.0.1:9081.
+  # Solo Nginx se conecta a ella; backend y PostgreSQL no tienen salida.
+  entry:
+  isolated:
+    internal: true
+
+volumes:
+  test_database:
