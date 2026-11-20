@@ -1,14 +1,11 @@
-const crypto = require('node:crypto');
+const crypto = require('crypto');
 const mercadoPagoService = require('../services/mercadoPago.service');
-const Usuario = require('../models/usuario.model');
-const Tutoria = require('../models/tutoria.model');
-const SolicitudAyuda = require('../models/solicitudes/solicitudAyuda.model');
-const RespuestaAyuda = require('../models/solicitudes/respuestaAyuda.model');
 
 const mercadoPagoCtrl = {};
 
-const httpError = (status, msg) => Object.assign(new Error(msg), { status });
-
+// Verifica la firma HMAC que Mercado Pago envia en x-signature
+// (ts + v1) con la clave secreta configurada en el panel de desarrollador.
+// Devuelve 0 si es valida o el codigo HTTP de error correspondiente.
 const validarFirmaWebhook = (req) => {
     const secret = process.env.MP_WEBHOOK_SECRET;
     if (!secret) return 503;
@@ -33,44 +30,6 @@ const validarFirmaWebhook = (req) => {
         && crypto.timingSafeEqual(expectedBuffer, receivedBuffer) ? 0 : 401;
 };
 
-const resolverEntidadPago = async (req) => {
-    const tipo = req.body.tipo;
-    const entidadId = Number(req.body.entidadId);
-    if (!['ayuda', 'tutoria'].includes(tipo) || !Number.isSafeInteger(entidadId) || entidadId < 1) {
-        throw httpError(400, 'Tipo o identificador de pago inválido.');
-    }
-
-    const usuario = await Usuario.findByPk(req.userId);
-    if (!usuario) throw httpError(401, 'Sesión requerida.');
-
-    let entidad;
-    let pagadorId;
-    if (tipo === 'ayuda') {
-        entidad = await RespuestaAyuda.findByPk(entidadId, {
-            include: [{ model: SolicitudAyuda, as: 'solicitud' }]
-        });
-        if (!entidad?.solicitud) throw httpError(404, 'Respuesta no encontrada.');
-        pagadorId = entidad.solicitud.usuarioId;
-        if (entidad.estado !== 'ACEPTADA') {
-            throw httpError(400, 'Solo se pueden pagar respuestas aceptadas.');
-        }
-    } else {
-        entidad = await Tutoria.findByPk(entidadId);
-        if (!entidad) throw httpError(404, 'Tutoría no encontrada.');
-        pagadorId = entidad.alumnoId;
-        if (!['pendiente', 'aceptada'].includes(entidad.estado)) {
-            throw httpError(400, 'La tutoría no admite una preferencia de pago.');
-        }
-    }
-
-    if (usuario.rol !== 'admin' && usuario.id !== pagadorId) {
-        throw httpError(403, 'Solo el pagador autorizado puede crear la preferencia.');
-    }
-    if (entidad.pagada) throw httpError(400, 'El pago ya fue registrado.');
-
-    return { tipo, entidad };
-};
-
 mercadoPagoCtrl.crearPreferencia = async (req, res) => {
     /* #swagger.tags = ['MercadoPago']
        #swagger.summary = 'Crear preferencia de pago'
@@ -89,8 +48,9 @@ mercadoPagoCtrl.crearPreferencia = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al crear la preferencia.' }
     */
     try {
-        const { tipo, entidad } = await resolverEntidadPago(req);
-        const respuesta = await mercadoPagoService.crearPreferencia({ tipo, entidad });
+        const respuesta = await mercadoPagoService.crearPreferencia(
+            req.body.respuestaId
+        );
 
         res.json({
             status: 1,
@@ -98,12 +58,14 @@ mercadoPagoCtrl.crearPreferencia = async (req, res) => {
         });
 
     } catch (error) {
-        const status = error.status || 500;
-        if (status === 500) console.error(error);
-        res.status(status).json({
+
+        console.error(error);
+
+        res.status(500).json({
             status: 0,
-            msg: status === 500 ? "Error al crear la preferencia" : error.message
+            msg: "Error al crear la preferencia"
         });
+
     }
 
 };
@@ -119,19 +81,27 @@ mercadoPagoCtrl.webhook = async (req, res) => {
          schema: { type: 'object' }
        }
        #swagger.responses[200] = { description: 'Notificación procesada.' }
+       #swagger.responses[400] = { description: 'Firma malformada.' }
+       #swagger.responses[401] = { description: 'Firma inválida o expirada.' }
        #swagger.responses[500] = { description: 'Error interno.' }
+       #swagger.responses[503] = { description: 'Webhook sin secreto configurado.' }
     */
     const signatureStatus = validarFirmaWebhook(req);
-    if (signatureStatus) return res.sendStatus(signatureStatus);
+    if (signatureStatus !== 0) {
+        return res.status(signatureStatus).json({ status: 0, msg: 'Webhook no autorizado.' });
+    }
+    try {
+        await mercadoPagoService.procesarWebhook(req.body);
 
-    res.sendStatus(200);
-    setImmediate(async () => {
-        try {
-            await mercadoPagoService.procesarWebhook(req.body);
-        } catch (error) {
-            console.error(error);
-        }
-    });
+        res.sendStatus(200);
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.sendStatus(500);
+
+    }
 
 };
 

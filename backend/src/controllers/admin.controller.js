@@ -209,7 +209,9 @@ adminCtrl.getTutorialsByMonth = async (req, res) => {
                 [fn('TO_CHAR', col('createdAt'), 'MM'), 'month'],
                 [fn('COUNT', col('id')), 'count']
             ],
-            where: literal(`EXTRACT(YEAR FROM "createdAt") = EXTRACT(YEAR FROM NOW())`),
+            // Rango anual semiabierto: permite acotar el indice por createdAt.
+            // Mantiene los limites del anio segun la zona horaria de PostgreSQL.
+            where: literal(`"createdAt" >= date_trunc('year', NOW()) AND "createdAt" < date_trunc('year', NOW()) + INTERVAL '1 year'`),
             group: [fn('TO_CHAR', col('createdAt'), 'MM')],
             order: [[fn('TO_CHAR', col('createdAt'), 'MM'), 'ASC']]
         });

@@ -7,7 +7,6 @@ const authCtrl = require('../controllers/auth.controller');
 
 router.post('/crear-preferencia', authCtrl.verifyToken, mercadoPagoCtrl.crearPreferencia);
 
-// Webhook público: la autenticación es la firma HMAC de Mercado Pago.
+// Webhook
 router.post('/webhook', mercadoPagoCtrl.webhook);
-
 module.exports = router;

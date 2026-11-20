@@ -1083,24 +1083,26 @@ const ids = JSON.parse(rawIds);
     fixture_ids = {}
     try:
         fixture_ids = payment_fixture("create")
+        # API remota (develop): POST /crear-preferencia { respuestaId }.
+        # El servicio intenta Tutoria por PK y luego RespuestaAyuda; no hay
+        # verificacion de propietario ni validacion de formato: las brechas
+        # se registran como observaciones, no como fallos.
         preferencias = [
-            ("Sin token crea preferencia", None, "ayuda",
-             fixture_ids["respuestaId"], 401),
-            ("A compra respuesta aceptada de B", token_a, "ayuda",
-             fixture_ids["respuestaId"], 403),
-            ("A compra tutoria de B", token_a, "tutoria",
-             fixture_ids["tutoriaId"], 403),
-            ("B compra respuesta aceptada", token_b, "ayuda",
-             fixture_ids["respuestaId"], 200),
-            ("B compra su tutoria", token_b, "tutoria",
-             fixture_ids["tutoriaId"], 200),
-            ("Tipo de pago invalido", token_b, "otro",
-             fixture_ids["tutoriaId"], 400),
-            ("ID de pago invalido", token_b, "tutoria", "1 OR 1", 400),
+            ("Sin token crea preferencia", None,
+             fixture_ids["respuestaId"], 401, "control de autenticacion"),
+            ("A crea preferencia sobre respuesta de B", token_a,
+             fixture_ids["respuestaId"], 200,
+             "sin chequeo de propietario (brecha documentada)"),
+            ("B crea preferencia de su respuesta", token_b,
+             fixture_ids["respuestaId"], 200, "control positivo"),
+            ("ID inexistente", token_b, 99999999, 500,
+             "entidad inexistente devuelve 500"),
+            ("ID no numerico", token_b, "abc", 500,
+             "sin validacion de formato devuelve 500"),
         ]
-        for case, token, tipo, entity_id, expected in preferencias:
+        for case, token, entity_id, expected, note in preferencias:
             status, _, body = request("/api/mercadopago/crear-preferencia", {
-                "entidadId": entity_id, "tipo": tipo, "precio": 1
+                "respuestaId": entity_id
             }, token)
             init_point = ""
             try:
@@ -1110,8 +1112,8 @@ const ids = JSON.parse(rawIds);
             passed = status == expected and (
                 expected != 200 or init_point.startswith("http://127.0.0.1:9081/pago-simulado")
             )
-            record(case, f"{expected}; precio del cliente ignorado", status, passed,
-                   "simulador local" if status == 200 else "sin crear preferencia")
+            record(case, f"{expected}; {note}", status, passed,
+                   init_point if status == 200 else "sin crear preferencia")
 
         audit_before = audit_count()
         webhook_path = "/api/mercadopago/webhook?data.id=12345"
