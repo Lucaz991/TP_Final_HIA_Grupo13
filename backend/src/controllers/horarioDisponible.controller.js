@@ -1,7 +1,8 @@
 const HorarioDisponible = require('../models/horarioDisponible.model');
+const Usuario = require('../models/usuario.model');
 
 const horarioCtrl = {};
-const { Op } = require('sequelize');
+
 
 horarioCtrl.getHorariosProfesor = async (req, res) => {
     /* #swagger.tags = ['Horarios']
@@ -53,10 +54,18 @@ horarioCtrl.createHorario = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al crear horario.' }
     */
     try {
-        //console.log(req.body);
+        const usuario = await Usuario.findByPk(req.userId);
+        const profesorId = Number(req.body.profesorId);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && (usuario.rol !== 'profesor' || profesorId !== usuario.id)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede crear horarios en su propio perfil de profesor.' });
+        }
+        const profesor = await Usuario.findOne({ where: { id: profesorId, rol: 'profesor' } });
+        if (!profesor) return res.status(400).json({ status: 0, msg: 'Profesor inválido.' });
+
         const busq = await HorarioDisponible.findOne({
             where: {
-                profesorId: req.body.profesorId,
+                profesorId,
                 diaSemana: req.body.diaSemana,
                 horaInicio: req.body.horaInicio,
                 horaFin: req.body.horaFin,
@@ -64,11 +73,19 @@ horarioCtrl.createHorario = async (req, res) => {
             }
         });
         if (busq) {
-            busq.estado = { [Op.in]: ['pendiente', 'aceptada'] }
+            busq.estado = 'activo';
             await busq.save();
             return res.json({ status: 1, msg: 'Horario reactivado', data: busq });
         }
-        const nuevo = await HorarioDisponible.create({ ...req.body, estado: 'activo' }); return res.json({ status: 1, msg: 'Horario creado', data: nuevo });
+        const nuevo = await HorarioDisponible.create({
+            profesorId,
+            diaSemana: req.body.diaSemana,
+            horaInicio: req.body.horaInicio,
+            horaFin: req.body.horaFin,
+            modalidad: req.body.modalidad,
+            estado: 'activo'
+        });
+        return res.json({ status: 1, msg: 'Horario creado', data: nuevo });
 
     } catch (error) {
         console.log(error);
@@ -97,6 +114,11 @@ horarioCtrl.deleteHorario = async (req, res) => {
     try {
         const horario = await HorarioDisponible.findByPk(req.params.id);
         if (!horario) return res.status(404).json({ status: 0, msg: 'Horario no encontrado' });
+        const usuario = await Usuario.findByPk(req.userId);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && horario.profesorId !== usuario.id) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede eliminar sus propios horarios.' });
+        }
 
         horario.estado = 'inactivo';
         await horario.save();

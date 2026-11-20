@@ -4,6 +4,10 @@ const autenticacionCtrl = require('../controllers/autenticacion.controller');
 const { body, validationResult } = require('express-validator');
 const loginLimiter = require('../middleware/loginIntentos');
 
+const validarRolRegistro = body('rol')
+    .isIn(['alumno', 'profesor'])
+    .withMessage('El rol debe ser alumno o profesor');
+
 const validarCampos = (req, res, next) => {
     const errores = validationResult(req);
     if (!errores.isEmpty()) {
@@ -12,6 +16,7 @@ const validarCampos = (req, res, next) => {
     next();
 };
 router.post('/signup', [
+    validarRolRegistro,
     //  El email debe ser un formato de email válido
     body('email').isEmail().withMessage('Debe ser un email válido'),
     //  La contraseña debe tener al menos 6 caracteres
@@ -20,9 +25,9 @@ router.post('/signup', [
     body('nombre').trim().notEmpty().withMessage('El nombre es obligatorio'),
     validarCampos
 ], autenticacionCtrl.signUpUsuario);
-router.post('/signUp', autenticacionCtrl.signUpUsuario);
+router.post('/signUp', [validarRolRegistro, validarCampos], autenticacionCtrl.signUpUsuario);
 router.post('/login', loginLimiter, autenticacionCtrl.loginUsuario);
-router.post('/signUpGoogle', autenticacionCtrl.signUpGoogle);
+router.post('/signUpGoogle', [validarRolRegistro, validarCampos], autenticacionCtrl.signUpGoogle);
 router.post('/loginGoogle', autenticacionCtrl.loginGoogle);
 //router.post('/vincularGoogle', autenticacionCtrl.vincularGoogle);
 

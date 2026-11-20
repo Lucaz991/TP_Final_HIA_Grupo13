@@ -145,15 +145,20 @@
                                 <span class="badge badge-materia px-2 py-1 text-uppercase fw-semibold" style="font-size: 0.75rem;">
                                     {{ tutoria.categoria?.nombre || 'Tutoría' }}
                                 </span>
-                                <span class="badge text-uppercase fw-semibold" 
-                                      [ngClass]="{
-                                        'badge-estado-pendiente': tutoria.estado === 'pendiente',
-                                        'badge-estado-aceptada': tutoria.estado === 'aceptada' || tutoria.estado === 'aprobada',
-                                        'badge-estado-rechazada': tutoria.estado === 'rechazada',
-                                        'badge-estado-finalizada': tutoria.estado === 'finalizada' || tutoria.estado === 'completada'
-                                      }" style="font-size: 0.75rem;">
-                                    {{ tutoria.estado }}
-                                </span>
+                                <div class="d-flex gap-1 align-items-center">
+                                    <span class="badge" [ngClass]="tutoria.pagada ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-dark border border-warning'" style="font-size: 0.72rem;">
+                                        {{ tutoria.pagada ? '✓ Pagada' : '⏳ Impaga' }}
+                                    </span>
+                                    <span class="badge text-uppercase fw-semibold" 
+                                          [ngClass]="{
+                                            'badge-estado-pendiente': tutoria.estado === 'pendiente',
+                                            'badge-estado-aceptada': tutoria.estado === 'aceptada' || tutoria.estado === 'aprobada',
+                                            'badge-estado-rechazada': tutoria.estado === 'rechazada',
+                                            'badge-estado-finalizada': tutoria.estado === 'finalizada' || tutoria.estado === 'completada'
+                                          }" style="font-size: 0.75rem;">
+                                        {{ tutoria.estado }}
+                                    </span>
+                                </div>
                             </div>
                             <h6 class="fw-bold texto-primario mb-1">
                                 {{ rol === 'alumno' ? 'Docente: ' + (tutoria.profesor?.nombre + ' ' + tutoria.profesor?.apellido) : 'Estudiante: ' + (tutoria.alumno?.nombre + ' ' + tutoria.alumno?.apellido) }}
@@ -231,11 +236,16 @@
                         <button type="button" class="btn-close btn-close-white" (click)="cerrarModalTutoria()"></button>
                     </div>
                     <div class="modal-body p-4">
-                        <div class="mb-3">
+                        <div class="mb-3 d-flex align-items-center flex-wrap gap-2">
                             <span class="badge badge-materia px-2.5 py-1 text-uppercase fw-semibold" style="font-size: 0.75rem;">
                                 {{ tutoriaSeleccionada.categoria?.nombre || 'Tutoría' }}
                             </span>
-                            <span class="badge text-uppercase fw-semibold ms-2"
+                            <span class="badge fw-semibold" 
+                                  [ngClass]="tutoriaSeleccionada.pagada ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-dark border border-warning'" 
+                                  style="font-size: 0.75rem;">
+                                {{ tutoriaSeleccionada.pagada ? '✓ Pagada' : '⏳ Pago Pendiente' }}
+                            </span>
+                            <span class="badge text-uppercase fw-semibold"
                                   [ngClass]="{
                                     'badge-estado-pendiente': tutoriaSeleccionada.estado === 'pendiente',
                                     'badge-estado-aceptada': tutoriaSeleccionada.estado === 'aceptada' || tutoriaSeleccionada.estado === 'aprobada',
@@ -278,14 +288,29 @@
                                 <h6 class="fw-bold texto-primario mb-2">Acciones del Profesor</h6>
                                 
                                 @if (tutoriaSeleccionada.estado === 'pendiente') {
-                                    <div class="d-flex gap-2">
-                                        <button class="btn btn-success flex-grow-1 fw-semibold" (click)="actualizarEstadoTutoria('aceptada')">
-                                            <i class="bi bi-check-circle-fill me-1"></i>Aceptar Tutoría
-                                        </button>
-                                        <button class="btn btn-danger flex-grow-1 fw-semibold" (click)="actualizarEstadoTutoria('rechazada')">
-                                            <i class="bi bi-x-circle-fill me-1"></i>Rechazar
-                                        </button>
-                                    </div>
+                                    @if (tutoriaSeleccionada.pagada) {
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-success flex-grow-1 fw-semibold" (click)="actualizarEstadoTutoria('aceptada')">
+                                                <i class="bi bi-check-circle-fill me-1"></i>Aceptar Tutoría
+                                            </button>
+                                            <button class="btn btn-danger flex-grow-1 fw-semibold" (click)="actualizarEstadoTutoria('rechazada')">
+                                                <i class="bi bi-x-circle-fill me-1"></i>Rechazar
+                                            </button>
+                                        </div>
+                                    } @else {
+                                        <div class="alert alert-warning py-2 px-3 small text-center mb-2">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                            El alumno aún no abonó esta tutoría. No se puede aceptar hasta que se acredite el pago en Mercado Pago.
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-secondary flex-grow-1 fw-semibold" disabled title="Requiere pago">
+                                                <i class="bi bi-lock-fill me-1"></i>Aceptar Tutoría (Bloqueado)
+                                            </button>
+                                            <button class="btn btn-danger flex-grow-1 fw-semibold" (click)="actualizarEstadoTutoria('rechazada')">
+                                                <i class="bi bi-x-circle-fill me-1"></i>Rechazar
+                                            </button>
+                                        </div>
+                                    }
                                 } @else if (tutoriaSeleccionada.estado === 'aceptada') {
                                     <button class="btn btn-info w-100 text-white fw-semibold" (click)="actualizarEstadoTutoria('finalizada')">
                                         <i class="bi bi-flag-fill me-1"></i>Marcar como Finalizada

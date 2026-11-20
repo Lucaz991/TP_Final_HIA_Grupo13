@@ -1,3 +1,4 @@
+const { Op, fn, col, literal } = require('sequelize');
 const Usuario = require('../models/usuario.model');
 const Categoria = require('../models/categoria.model');
 const HorarioDisponible = require('../models/horarioDisponible.model');
@@ -5,10 +6,15 @@ const registrarAuditoria = require("../helpers/auditoria.helper");
 
 const usuarioCtrl = {};
 
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+
+const puedeGestionarUsuario = (usuario, id) =>
+    usuario.rol === 'admin' || usuario.id === Number(id);
+
 usuarioCtrl.getUsuarios = async (req, res) => {
     /* #swagger.tags = ['Usuarios']
        #swagger.summary = 'Listar usuarios o profesores'
-       #swagger.description = 'Retorna todos los usuarios registrados. Permite filtrar por rol (ej. ?rol=profesor) para obtener sus tutorías dictadas, opiniones y rating.'
+       #swagger.description = 'Retorna una página de hasta 100 usuarios. Permite filtrar por rol (ej. ?rol=profesor) para obtener sus tutorías dictadas, opiniones y rating.'
        #swagger.parameters['rol'] = {
          in: 'query',
          description: 'Filtrar por rol: alumno, profesor, admin.',
@@ -21,76 +27,72 @@ usuarioCtrl.getUsuarios = async (req, res) => {
        }
        #swagger.responses[500] = { description: 'Error al obtener los usuarios.' }
     */
-    try {
-        const { rol } = req.query;
-        const whereClause = rol ? { rol } : {};
-        const include = [];
-
-        if (!rol || rol === 'profesor') {
-            include.push({
-                model: Categoria,
-                as: 'categoriasEnseniadas',
-                attributes: ['id', 'nombre'],
-                through: { attributes: [] }
-            });
-            include.push({ model: HorarioDisponible, as: 'horarios' });
+    const positive = value => /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 12);
+    if (!positive(page) || !positive(limit) || limit > 100 || !Number.isSafeInteger((page - 1) * limit)
+        || (req.query.id !== undefined && !positive(req.query.id))
+        || (req.query.categoriaId && !positive(req.query.categoriaId))
+        || (req.query.rol && !['profesor', 'alumno', 'admin'].includes(req.query.rol))) {
+        return res.status(400).json({ status: 0, msg: 'Filtros o paginación inválidos.' });
+    }
+    let order = [['id', 'ASC']];
+    if (req.query.orden === 'cercania') {
+        const lat = Number(req.query.lat), lng = Number(req.query.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180
+            || req.query.lat === '' || req.query.lng === '') {
+            return res.status(400).json({ status: 0, msg: 'Coordenadas inválidas.' });
         }
-
-        const usuarios = await Usuario.findAll({
-            where: whereClause,
-            include: include,
-            attributes: {
-                exclude: ['createdAt', 'updatedAt']
-            }
-        });
-
+        // Coseno del ángulo central: orden global por cercanía, antes de paginar.
+        order = [[literal(`(sin(radians(${lat})) * sin(radians("Usuario".lat)) + cos(radians(${lat})) * cos(radians("Usuario".lat)) * cos(radians("Usuario".lng - ${lng})))`), 'DESC NULLS LAST'], ['id', 'ASC']];
+    }
+    try {
+        const where = req.query.rol ? { rol: req.query.rol } : {};
+        if (req.query.id) where.id = Number(req.query.id);
+        if (req.query.categoriaId) {
+            where[Op.and] = literal(`EXISTS (SELECT 1 FROM profesores_categorias pc WHERE pc."profesorId" = "Usuario".id AND pc."categoriaId" = ${Number(req.query.categoriaId)})`);
+        }
+        const total = await Usuario.count({ where });
+        const ids = await Usuario.findAll({ where, attributes: ['id'], order, limit, offset: (page - 1) * limit });
+        const include = [
+            { model: Categoria, as: 'categoriasEnseniadas', attributes: ['id', 'nombre'], through: { attributes: [] } },
+            { model: HorarioDisponible, as: 'horarios' }
+        ];
+        const users = ids.length ? await Usuario.findAll({
+            where: { id: { [Op.in]: ids.map(u => u.id) } }, include,
+            attributes: { exclude: ['contraseniaHash', 'createdAt', 'updatedAt'] }
+        }) : [];
+        const byId = new Map(users.map(u => [u.id, u.toJSON()]));
+        const data = ids.map(u => byId.get(u.id)).filter(Boolean);
         const Tutoria = require('../models/tutoria.model');
         const Calificacion = require('../models/calificacion.model');
-
-        const usuariosData = [];
-        for (const u of usuarios) {
-            const userJson = u.toJSON();
-            if (userJson.rol === 'profesor') {
-                const tutorias = await Tutoria.findAll({
-                    where: {
-                        profesorId: userJson.id,
-                        estado: 'finalizada'
-                    },
-                    include: [
-                        { model: Calificacion, as: 'calificacion' },
-                        { model: Usuario, as: 'alumno', attributes: ['nombre', 'apellido'] }
-                    ]
-                });
-
-                userJson.tutoriasDictadas = tutorias.length;
-
-                const opiniones = [];
-                const calificaciones = [];
-                for (const t of tutorias) {
-                    if (t.calificacion) {
-                        calificaciones.push(t.calificacion);
-                        opiniones.push({
-                            id: t.calificacion.id,
-                            calificacion: t.calificacion.calificacion,
-                            comentario: t.calificacion.comentario,
-                            fecha: t.calificacion.createdAt,
-                            alumno: t.alumno ? `${t.alumno.nombre} ${t.alumno.apellido}` : 'Alumno'
-                        });
-                    }
-                }
-                userJson.opiniones = opiniones;
-
-                if (calificaciones.length > 0) {
-                    const suma = calificaciones.reduce((sum, c) => sum + c.calificacion, 0);
-                    userJson.rating = parseFloat((suma / calificaciones.length).toFixed(1));
-                } else {
-                    userJson.rating = 0.0;
-                }
-            }
-            usuariosData.push(userJson);
+        const profesores = data.filter(u => u.rol === 'profesor');
+        // Agregación SQL: no materializar las tutorías dictadas en Node.
+        const stats = profesores.length ? await Tutoria.findAll({
+            where: { profesorId: { [Op.in]: profesores.map(u => u.id) }, estado: 'finalizada' },
+            attributes: ['profesorId', [fn('COUNT', fn('DISTINCT', col('Tutoria.id'))), 'cantidad'],
+                [fn('AVG', col('calificacion.calificacion')), 'rating']],
+            include: [{ model: Calificacion, as: 'calificacion', attributes: [], required: false }],
+            group: ['profesorId'], raw: true
+        }) : [];
+        const statsById = new Map(stats.map(row => [Number(row.profesorId), row]));
+        for (const profesor of profesores) {
+            const stat = statsById.get(profesor.id);
+            profesor.tutoriasDictadas = Number(stat?.cantidad || 0);
+            profesor.rating = Number(Number(stat?.rating || 0).toFixed(1));
+            // La interfaz muestra dos opiniones: recuperar únicamente esas dos.
+            const recientes = await Tutoria.findAll({
+                attributes: ['id'], where: { profesorId: profesor.id, estado: 'finalizada' },
+                include: [{ model: Calificacion, as: 'calificacion', required: true },
+                    { model: Usuario, as: 'alumno', attributes: ['nombre', 'apellido'] }],
+                order: [['id', 'DESC']], limit: 2, subQuery: false
+            });
+            profesor.opiniones = recientes.map(t => ({ id: t.calificacion.id,
+                calificacion: t.calificacion.calificacion, comentario: t.calificacion.comentario,
+                fecha: t.calificacion.createdAt,
+                alumno: t.alumno ? `${t.alumno.nombre} ${t.alumno.apellido}` : 'Alumno' }));
         }
-
-        res.json(usuariosData);
+        res.json({ data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: '0', msg: 'Error al obtener los usuarios.' });
@@ -125,38 +127,24 @@ usuarioCtrl.updateUsuario = async (req, res) => {
         const { id } = req.params;
         const data = req.body;
 
+        const usuarioActual = await getUsuarioActual(req);
         const usuario = await Usuario.findByPk(id);
         if (!usuario) {
             return res.status(404).json({ status: '0', msg: 'Usuario no encontrado.' });
         }
-
-        await usuario.update({
-            nombre: data.nombre,
-            apellido: data.apellido,
-            ubicacion: data.ubicacion,
-            universidad: data.universidad,
-            carrera: data.carrera,
-            nivelAcademico: data.nivelAcademico,
-            biografia: data.biografia,
-            tarifaBase: data.tarifaBase
-        });
-
-        if (usuario.rol === 'profesor' && data.perfilProfesor) {
-            const [perfil] = await PerfilProfesor.findOrCreate({
-                where: { usuarioId: id },
-                defaults: { primario: false, secundario: false, universitario: false, doctorado: false }
-            });
-            await perfil.update({
-                primario: !!data.perfilProfesor.primario,
-                secundario: !!data.perfilProfesor.secundario,
-                universitario: !!data.perfilProfesor.universitario,
-                doctorado: !!data.perfilProfesor.doctorado
-            });
+        if (!usuarioActual || !puedeGestionarUsuario(usuarioActual, id)) {
+            return res.status(403).json({ status: '0', msg: 'Solo puede actualizar su propio perfil.' });
         }
+
+        const cambios = {};
+        for (const campo of ['nombre', 'apellido', 'ubicacion', 'universidad', 'carrera',
+            'nivelAcademico', 'biografia', 'tarifaBase']) {
+            if (data[campo] !== undefined) cambios[campo] = data[campo];
+        }
+        await usuario.update(cambios);
 
         const usuarioActualizado = await Usuario.findByPk(id, {
             include: [
-                { model: PerfilProfesor, as: 'perfilProfesor' },
                 { model: Categoria, as: 'categoriasEnseniadas', attributes: ['id', 'nombre'], through: { attributes: [] } },
                 { model: HorarioDisponible, as: 'horarios' }
             ]
@@ -195,12 +183,23 @@ usuarioCtrl.addHorario = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al agregar horario.' }
     */
     try {
-        const { usuarioId, diaSemana, horaInicio, horaFin } = req.body;
+        const usuario = await getUsuarioActual(req);
+        const profesorId = Number(req.body.usuarioId || req.body.profesorId);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && (usuario.rol !== 'profesor' || profesorId !== usuario.id)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede agregar horarios a su propio perfil de profesor.' });
+        }
+        const profesor = await Usuario.findOne({ where: { id: profesorId, rol: 'profesor' } });
+        if (!profesor) return res.status(400).json({ status: 0, msg: 'Profesor inválido.' });
+
+        const { diaSemana, horaInicio, horaFin } = req.body;
         const nuevo = await HorarioDisponible.create({
-            profesorId: usuarioId,
+            profesorId: profesorId,
             diaSemana: diaSemana,
             horaInicio: horaInicio,
-            horaFin: horaFin
+            horaFin: horaFin,
+            modalidad: req.body.modalidad || 'ambas',
+            estado: 'activo'
         });
         await registrarAuditoria(
             req,
@@ -208,7 +207,7 @@ usuarioCtrl.addHorario = async (req, res) => {
             "HorarioDisponible",
             nuevo.id,
             `Agregó un horario (${diaSemana} ${horaInicio}-${horaFin})`,
-            usuarioId
+            profesorId
         );
         res.json({ status: 1, msg: 'Horario agregado correctamente', data: nuevo });
     } catch (error) {
@@ -235,6 +234,14 @@ usuarioCtrl.deleteHorario = async (req, res) => {
     */
     try {
         const { id } = req.params;
+        const horario = await HorarioDisponible.findByPk(id);
+        if (!horario) return res.status(404).json({ status: 0, msg: 'Horario no encontrado.' });
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (usuario.rol !== 'admin' && horario.profesorId !== usuario.id) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede eliminar sus propios horarios.' });
+        }
+
         await HorarioDisponible.destroy({ where: { id } });
         await registrarAuditoria(
             req,

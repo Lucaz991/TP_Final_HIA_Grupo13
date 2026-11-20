@@ -191,6 +191,13 @@
 
         <!-- Data Table Section — ngx-datatables-net -->
         <div class="tarjeta-delicada p-4 shadow-sm" #tableContainer id="tableContainer">
+            @if (tableError) {
+                <div class="alert alert-danger" role="alert">
+                    {{ tableError }}
+                    <button class="btn btn-sm btn-outline-danger ms-2"
+                        (click)="currentTableView === 'tutorias' ? loadFullTutorials() : loadUsers()">Reintentar</button>
+                </div>
+            }
             @if (currentTableView === 'tutorias') {
                 <!-- Table header Tutorías -->
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 border-bottom pb-3 mb-3">
@@ -199,10 +206,10 @@
                     </h6>
                     <div class="d-flex gap-2">
                         <button class="btn btn-elegante btn-sm" id="btn-export-pdf" (click)="exportToPDF()">
-                            <i class="bi bi-file-earmark-pdf me-1"></i> Exportar PDF
+                            <i class="bi bi-file-earmark-pdf me-1"></i> PDF de esta página
                         </button>
                         <button class="btn btn-elegante btn-sm" id="btn-export-excel" (click)="exportToExcel()">
-                            <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
+                            <i class="bi bi-file-earmark-excel me-1"></i> Excel de esta página
                         </button>
                     </div>
                 </div>

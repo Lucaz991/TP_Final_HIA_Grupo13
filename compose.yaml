@@ -1,0 +1,533 @@
+services:
+  # ==========================================
+  # 1. BASE DE DATOS Y ADMINISTRACIÓN
+  # ==========================================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.35
+    command: 
+      - etcd
+      - --name=etcd
+      - --data-dir=/etcd_data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd=http://etcd:2380
+      - --initial-cluster-state=new 
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+    volumes:
+      - etcd_data:/etcd_data
+    networks:
+      - red-patroni
+
+  node1:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      PATRONI_NAME: node1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node1:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node1:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - node1_data:/var/lib/postgresql/data
+    networks:
+      - red-patroni
+    depends_on:
+      - etcd
+
+  node2:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      PATRONI_NAME: node2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node2:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node2:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - node2_data:/var/lib/postgresql/data
+    networks:
+      - red-patroni
+    depends_on:
+      - etcd
+
+  node3:
+    build:
+      context: ./db/cluster
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      PATRONI_NAME: node3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: node3:8000
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: node3:5432
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_REPL_USER: ${DB_REPL_USER}
+      DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+      DB_APP_USER: ${DB_APP_USER}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD}
+      DB_MONITOR_USER: ${DB_MONITOR_USER}
+      DB_MONITOR_PASSWORD: ${DB_MONITOR_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - node3_data:/var/lib/postgresql/data
+    networks:
+      - red-patroni
+    depends_on:
+      - etcd
+
+  proxy:
+    image: haproxy:3.0-alpine
+    ports:
+      - "127.0.0.1:${DB_PROXY_PORT:-5465}:5465"
+      - "127.0.0.1:7000:7000"
+    volumes:
+      - ./db/cluster/config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      redtpfinal:
+        aliases:
+          - postgres
+          - proxy
+          - haproxy
+      red-patroni:
+    depends_on:
+      - node1
+      - node2
+      - node3
+
+  pgadmin:
+    image: dpage/pgadmin4:9.19
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Completa el archivo .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Completa el archivo .env}
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - redtpfinal
+    depends_on:
+      - proxy
+
+  # ==========================================
+  # 2. SISTEMA DE MONITOREO
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v3
+    container_name: prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - cadvisor
+      - alertmanager
+      - postgres-exporter-node1
+      - postgres-exporter-node2
+      - postgres-exporter-node3
+    networks:
+      - redtpfinal
+
+  alertmanager:
+    image: prom/alertmanager:v0.30.0
+    container_name: alertmanager
+    restart: unless-stopped
+    environment:
+      N8N_WEBHOOK_ALERTS_USER: ${N8N_WEBHOOK_ALERTS_USER}
+      N8N_WEBHOOK_ALERTS_PASS: ${N8N_WEBHOOK_ALERTS_PASS}
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      - alertmanager_data:/alertmanager
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sed -e "s|\$${N8N_WEBHOOK_ALERTS_USER}|$$N8N_WEBHOOK_ALERTS_USER|g" \
+            -e "s|\$${N8N_WEBHOOK_ALERTS_PASS}|$$N8N_WEBHOOK_ALERTS_PASS|g" \
+            /etc/alertmanager/alertmanager.yml.tpl > /tmp/alertmanager.yml && \
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
+    networks:
+      - redtpfinal
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    mem_limit: 1536m
+    mem_reservation: 512m
+    ports:
+      - "127.0.0.1:8083:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - redtpfinal
+
+  # 3 Exporters individuales para monitorear cada nodo del clúster
+  postgres-exporter-node1:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node1:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      - node1
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  postgres-exporter-node2:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node2:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      - node2
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  postgres-exporter-node3:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@node3:5432/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      - node3
+    networks:
+      - red-patroni
+      - redtpfinal
+
+  grafana:
+    image: grafana/grafana:latest
+    mem_limit: 1280m
+    mem_reservation: 512m
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:?Completar en .env - no usar admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Completar en .env}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - redtpfinal
+
+  python-analyser:
+    build: ./python-analyser
+    container_name: python-analyser
+    restart: unless-stopped
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 3. NEXTCLOUD
+  # ==========================================
+  nextcloud-db:
+    image: postgres:18
+    shm_size: 2gb
+    environment:
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME}
+    volumes:
+      - db-nextcloud:/var/lib/postgresql
+    networks:
+      - redtpfinal
+
+  nextcloud:
+    image: nextcloud:latest
+    ports:
+      - "127.0.0.1:8082:80"
+    depends_on:
+      - nextcloud-db
+    environment:
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_DB=${NEXTCLOUD_DB_NAME}
+      - POSTGRES_USER=${NEXTCLOUD_DB_USER}
+      - POSTGRES_HOST=${NEXTCLOUD_DB_HOST}
+    volumes:
+      - nextcloud:/var/www/html
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 4. APLICACIÓN (Frontend y Backend)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: app-backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET}
+      MERCADOPAGO_NOTIFICATION_URL: ${MERCADOPAGO_NOTIFICATION_URL}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    networks:
+      - redtpfinal
+    depends_on:
+      - proxy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app-frontend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
+    ports:
+      - "127.0.0.1:8081:80"
+    networks:
+      - redtpfinal
+    depends_on:
+      - backend
+
+  # ==========================================
+  # 5. GLPI 
+  # ==========================================
+  glpi-db:
+    image: "mysql:8.4"
+    restart: "unless-stopped"
+    volumes:
+      - db-glpi:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${GLPI_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+    networks:
+      - redtpfinal
+
+  glpi:
+    image: "glpi/glpi:latest"
+    restart: "unless-stopped"
+    volumes:
+      - glpi_data:/var/glpi
+    depends_on:
+      - glpi-db
+    ports:
+      - "127.0.0.1:80:80"
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 6. N8N
+  # ==========================================
+  sandbox-certs:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
+    user: '0:0'
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api
+        --control-san-prefix sandbox-runner --world-readable &&
+        chown -R sandbox-api:sandbox-api /tls/api && chmod -R a+rX /tls
+    environment:
+      NUM_RUNNERS: '1'
+    volumes:
+      - sandbox-tls:/tls
+    networks:
+      - redtpfinal
+
+  sandbox-api:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION}
+    depends_on:
+      sandbox-certs:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      SANDBOX_API_GRPC_TLS_CERT_FILE: /tls/api/grpc-server.crt
+      SANDBOX_API_GRPC_TLS_KEY_FILE: /tls/api/grpc-server.key
+      SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/api/control-grpc-api-client.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/api/control-grpc-api-client.key
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME: sandbox-runner-1
+    volumes:
+      - sandbox-tls:/tls:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - redtpfinal
+
+  sandbox-runner-1:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:${N8N_SANDBOX_VERSION}
+    privileged: true
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      SANDBOX_RUNNER_API_GRPC_ADDR: sandbox-api:9090
+      SANDBOX_RUNNER_HTTP_BASE_URL: https://sandbox-runner-1:8080
+      SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR: ':9091'
+      SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR: sandbox-runner-1:9091
+      SANDBOX_RUNNER_ID: runner-1
+      SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE: ghcr.io/n8n-io/n8n-sandbox-service-sandbox:${N8N_SANDBOX_VERSION}
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE: /tls/runner/ca.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE: /tls/runner/grpc-client.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE: /tls/runner/grpc-client.key
+      SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME: sandbox-api
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/runner/control-grpc-server.crt
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/runner/control-grpc-server.key
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE: /tls/runner/ca.crt
+    volumes:
+      - sandbox-tls:/tls:ro
+    networks:
+      - redtpfinal
+
+  n8n:
+    image: docker.io/n8nio/n8n:${N8N_VERSION}
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:5678:5678' # Puerto para acceder a la interfaz web de n8n
+    env_file: .env
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - redtpfinal
+
+  runners:
+    image: ghcr.io/n8n-io/runners:${N8N_VERSION}
+    depends_on:
+      - n8n
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: '15'
+    networks:
+      - redtpfinal
+
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET}
+    volumes:
+      - ./searxng/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - redtpfinal
+
+  # ==========================================
+  # 8. CLOUDFLARE TUNNEL (publicacion segura)
+  # ==========================================
+  # Named Tunnel administrado desde el dashboard de Cloudflare Zero Trust.
+  # Requiere TUNNEL_TOKEN en .env (se obtiene al crear el tunnel en
+  # one.dash.cloudflare.com -> Networks -> Tunnels).
+  # Los "Public Hostnames" se configuran en el dashboard apuntando a los
+  # nombres de servicio internos:
+  #   app.<dominio>    -> http://app-frontend:80
+  #   glpi.<dominio>   -> http://glpi:80
+  #   docs.<dominio>   -> http://nextcloud:80
+  #   n8n.<dominio>    -> http://n8n:5678
+  #   monitor.<dominio>-> http://prometheus:9090
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - redtpfinal
+  # ==========================================
+  # 9. BACKUP DE LA BASE DE DATOS
+  # ==========================================
+  backup:
+    build: ./db/backup
+    restart: unless-stopped
+    environment:
+      TZ: America/Argentina/Jujuy
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      BACKUP_SCHEDULE: "${BACKUP_SCHEDULE:-0 3 * * *}"
+      BACKUP_WEBHOOK_URL: "${BACKUP_WEBHOOK_URL:-http://n8n:5678/webhook/backup-verificacion}"
+    volumes:
+      - "${BACKUP_DIR:-../Respaldos}:/backups"
+    networks:
+      - redtpfinal
+
+# declaracion global de los volúmenes
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:
+  etcd_data:
+  postgres18_data:
+  pgadmin_data:
+  prometheus_data:
+  alertmanager_data:
+  nextcloud:
+  db-nextcloud:
+  glpi_data:
+  db-glpi:
+  n8n-data:
+  sandbox-tls:
+  grafana_data:
+
+# declaracion global de la red
+networks:
+  redtpfinal:
+  red-patroni:
+    internal: true

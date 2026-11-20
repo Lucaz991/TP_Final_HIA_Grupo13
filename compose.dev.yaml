@@ -1,0 +1,28 @@
+# Configuración de entorno de DESARROLLO (override sobre compose.yaml)
+# Uso: docker compose -f compose.yaml -f compose.dev.yaml up -d --build etcd node1 node2 node3 proxy backend frontend
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: app-backend-dev
+    environment:
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:4200
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: app-frontend-dev
+    environment:
+      NODE_ENV: development
+    ports:
+      - "127.0.0.1:4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

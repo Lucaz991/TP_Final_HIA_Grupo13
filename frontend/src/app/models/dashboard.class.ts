@@ -4,6 +4,10 @@ export interface DashboardSummary {
     totalHelpRequests: number;
     totalCategories: number;
     avgRating: string;
+    totalRevenue?: number;
+    pendingRevenue?: number;
+    averagePrice?: number;
+    paymentRate?: number;
 }
 
 export interface RoleCount {
@@ -81,4 +85,12 @@ export interface FullTutorial {
     profesor?: TutorialUser;
     categoria?: TutorialCategory;
     calificacion?: CalificacionData;
+}
+
+export interface PaginatedResponse<T> {
+    status: number;
+    data: T[];
+    recordsTotal: number;
+    recordsFiltered: number;
+    pagination: { page: number; limit: number; total: number; totalPages: number };
 }

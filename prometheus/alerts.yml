@@ -1,0 +1,92 @@
+groups:
+  - name: cluster_postgres_alerts
+    rules:
+      # 1. PostgreSQL no responde, aunque el exporter siga activo
+      - alert: PostgresNodeDown
+        expr: pg_up{job="postgres-cluster-nodes"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nodo PostgreSQL caído"
+          description: "PostgreSQL del nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} no responde desde hace más de 30 segundos."
+
+      # 2. El exporter del nodo no responde 
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-cluster-nodes"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL Exporter caído"
+          description: "El exporter del nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} no responde desde hace más de 30 segundos."
+
+      # 3. Uso elevado de conexiones en cualquiera de los tres nodos
+      - alert: PostgresHighConnections
+        expr: (sum by (instance, node) (pg_stat_activity_count{job="postgres-cluster-nodes"}) / 500) * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Conexiones elevadas en PostgreSQL"
+          description: "El nodo {{ if $labels.node }}{{ $labels.node }}{{ else }}{{ $labels.instance }}{{ end }} supera el 80% del límite de conexiones (500)."
+
+      # 4. CPU del host monitoreado por Node Exporter
+      - alert: HostHighCpuUsage
+        expr: (rate(container_cpu_usage_seconds_total{name!=""}[1m]) * 100) > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso de CPU alto en el servidor"
+          description: "La CPU del servidor {{ $labels.instance }} supera el 85% durante más de 2 minutos."
+
+      # 5. Memoria del host monitoreado por Node Exporter
+      - alert: HostLowMemory
+        expr: (container_memory_usage_bytes{name!=""} / (1024*1024*1024)) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memoria RAM baja en el servidor"
+          description: "La memoria disponible en {{ $labels.instance }} es menor al 15% del total."
+
+      # 6. Retraso (lag) en la replicación de PostgreSQL
+      - alert: PostgresReplicationLag
+        expr: pg_stat_replication_pg_wal_lsn_diff{job="postgres-cluster-nodes"} > 16777216
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retraso en la replicación de PostgreSQL"
+          description: "La réplica {{ $labels.application_name }} tiene un lag mayor a 16MB respecto al nodo líder."
+
+      # 7. Pérdida de réplicas en streaming (alta disponibilidad en riesgo)
+      - alert: PostgresReplicasDegraded
+        expr: count(pg_stat_replication_pg_current_wal_lsn_bytes{job="postgres-cluster-nodes"}) < 2
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Réplicas de PostgreSQL degradadas"
+          description: "El clúster tiene menos de 2 réplicas conectadas en streaming al nodo líder."
+
+      # 8. Detección de bloqueos muertos (Deadlocks) en PostgreSQL
+      - alert: PostgresDeadlocksDetected
+        expr: increase(pg_stat_database_deadlocks{job="postgres-cluster-nodes",datname="tpFinal"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deadlock detectado en PostgreSQL"
+          description: "Se han producido interbloqueos (deadlocks) en la base de datos {{ $labels.datname }} del nodo {{ $labels.node }}."
+
+      # 9. Uso elevado de almacenamiento en disco
+      - alert: HostHighDiskUsage
+        expr: (max(container_fs_usage_bytes{device=~"overlay.*"}) / max(container_fs_limit_bytes{device=~"overlay.*"})) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de almacenamiento en disco"
+          description: "El uso de espacio en disco del sistema de contenedores supera el 85%."

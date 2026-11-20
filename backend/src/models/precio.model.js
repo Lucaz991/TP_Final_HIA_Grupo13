@@ -15,6 +15,13 @@ const Precio = sequelize.define('Precio', {
 }, {
     tableName: 'precios',
     timestamps: true,
+    indexes: [
+        {
+            name: 'precios_nivel_modalidad_unique',
+            unique: true,
+            fields: ['nivel', 'modalidad']
+        }
+    ]
 });
 
 module.exports = Precio;

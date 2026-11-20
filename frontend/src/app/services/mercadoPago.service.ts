@@ -13,13 +13,13 @@ export class MercadoPagoService {
 
   constructor(private http: HttpClient) { }
 
-  crearPreferencia(respuestaId: number, precio?: number): Observable<any> {
+  crearPreferencia(entidadId: number, tipo: 'ayuda' | 'tutoria'): Observable<any> {
 
     return this.http.post<any>(
       `${this.apiUrl}/crear-preferencia`,
       {
-        respuestaId: respuestaId,
-        precio: precio ?? 0
+        entidadId,
+        tipo
       }
     );
 

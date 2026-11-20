@@ -12,6 +12,11 @@ require('./src/models/solicitudes/asociaciones.model.js'); // Importa las asocia
 //Creacion de la aplicacion 
 var app = express();
 
+// Detras de Nginx (y cloudflared en produccion): la IP real del cliente
+// llega en X-Forwarded-For. Confiamos solo en saltos de red privada/loopback;
+// sin esto express-rate-limit agrupa a todos los usuarios bajo la IP del proxy.
+app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
 //Middlewares  
 app.use(express.json()); //permite recibir JSON 
 app.use(cors({
@@ -27,20 +32,30 @@ const swaggerFile = require('./swagger_output.json');
 // Documentación Swagger UI
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
+// Rechaza IDs no numéricos en la URL con 400 antes de llegar a Sequelize
+// (un ID malformado provocaba HTTP 500 por el error de casteo en la consulta).
+// Los param callbacks no se heredan a routers montados: hay que registrarlos
+// sobre cada router individual.
+const { nombresIds, validarParamIds } = require('./src/middleware/validarParamIds');
+const aplicarIds = (router) => {
+    for (const nombre of nombresIds) router.param(nombre, validarParamIds);
+    return router;
+};
+
 //Rutas 
-app.use('/api/admin', require('./src/routes/admin.route'));
-app.use('/api/autenticacion', require('./src/routes/autenticacion.route.js'));
-app.use('/api/usuario', require('./src/routes/usuario.route.js'));
+app.use('/api/admin', aplicarIds(require('./src/routes/admin.route')));
+app.use('/api/autenticacion', aplicarIds(require('./src/routes/autenticacion.route.js')));
+app.use('/api/usuario', aplicarIds(require('./src/routes/usuario.route.js')));
 
-app.use('/api/solicitud', require('./src/routes/solicitudes/solicitudAyuda.route'));
-app.use('/api/respuesta', require('./src/routes/solicitudes/respuestaAyuda.route'));
-app.use('/api/tutoria', require('./src/routes/tutoria.route.js'));
+app.use('/api/solicitud', aplicarIds(require('./src/routes/solicitudes/solicitudAyuda.route')));
+app.use('/api/respuesta', aplicarIds(require('./src/routes/solicitudes/respuestaAyuda.route')));
+app.use('/api/tutoria', aplicarIds(require('./src/routes/tutoria.route.js')));
 
-app.use('/api/categoria', require('./src/routes/categoria.route.js'));
-app.use('/api/mercadopago', require('./src/routes/mercadoPago.route.js'));
-app.use('/api/calificacion', require('./src/routes/calificacion.route.js'));
+app.use('/api/categoria', aplicarIds(require('./src/routes/categoria.route.js')));
+app.use('/api/mercadopago', aplicarIds(require('./src/routes/mercadoPago.route.js')));
+app.use('/api/calificacion', aplicarIds(require('./src/routes/calificacion.route.js')));
 
-app.use("/api/auditoria",require("./src/routes/auditoria.route.js"));
+app.use("/api/auditoria", aplicarIds(require("./src/routes/auditoria.route.js")));
 
 // =========================
 // REDIRECCIONES DE MERCADO PAGO
@@ -81,43 +96,34 @@ app.get("/pago-pendiente", (req, res) => {
 });
 
 
-app.use('/api/precio', require('./src/routes/precio.route.js'));
-app.use('/api/mercadopago', require('./src/routes/mercadoPago.route.js'));
-app.use('/api/calificacion', require('./src/routes/calificacion.route.js'));
+app.use('/api/precio', aplicarIds(require('./src/routes/precio.route.js')));
+app.use('/api/mercadopago', aplicarIds(require('./src/routes/mercadoPago.route.js')));
+app.use('/api/calificacion', aplicarIds(require('./src/routes/calificacion.route.js')));
 
-app.use('/api/horarioDisponible', require('./src/routes/horarioDisponible.route.js'))
-app.use('/api/chat', require('./src/routes/chat.route'));
+app.use('/api/horarioDisponible', aplicarIds(require('./src/routes/horarioDisponible.route.js')))
+app.use('/api/chat', aplicarIds(require('./src/routes/chat.route')));
 
 
 //Configuracion del puerto 
 app.set('port', process.env.PORT || 3000);
 
-const seedPrecios = require('./src/seeders/precios.seed.js')
-const seedCategorias = require('./src/seeders/categorias.seed.js');
-
-const seedUsuarios = require('./src/seeders/usuarios.seed.js');
-const seedProfesorCategorias = require('./src/seeders/profesoresCategorias.seed.js');
-//const seedHorarios = require('./src/seeders/horariosDisponibles.seed.js');
-const seedAdmin = require('./src/seeders/admin.seed.js');
-
-
-sequelize.sync({ force: true })
-    .then(async () => {
+// Los datos iniciales se cargan mediante los scripts SQL.
+sequelize.sync()
+    .then(() => {
         console.log('Tablas de PostgreSQL sincronizadas');
 
-        //  datos precargados
-        await seedPrecios();
-        await seedCategorias();
-        await seedUsuarios();
-        await seedProfesorCategorias();
-        //await seedHorarios();
-        await seedAdmin();
-
-        app.listen(app.get('port'), () => { // Arranca el servidor 
-            console.log(`Server started on port`, app.get('port'));
+        app.listen(app.get('port'), () => {
+            console.log(
+                'Servidor iniciado en el puerto',
+                app.get('port')
+            );
         });
     })
     .catch(err => {
-        console.error('No se pudo iniciar el servidor debido a un error en la BD:', err);
-    });
+        console.error(
+            'No se pudo iniciar el servidor debido a un error en la BD:',
+            err
+        );
 
+        process.exitCode = 1;
+    });

@@ -1,0 +1,475 @@
+{
+  "timestamp_utc": "2026-11-19T06:17:04.473620+00:00",
+  "source_commit": "9dcf467dea75e23d0a9ad4d5f94d3134408b99c2",
+  "backend_image": "sha256:39c5287da87843984ed3e3299be54c6460220ad49c8f346641bdc5860a1f7a7a",
+  "target": "http://127.0.0.1:9081",
+  "fixture_ids": {
+    "tutorias": [
+      58,
+      59,
+      60,
+      61,
+      62
+    ],
+    "horarios": [
+      23,
+      24
+    ],
+    "categorias": [
+      11,
+      12
+    ],
+    "ayuda": {
+      "solicitudes": [
+        34,
+        35,
+        36,
+        37
+      ],
+      "respuestas": [
+        18,
+        19
+      ],
+      "tutorias": [
+        63
+      ]
+    }
+  },
+  "fixtures_cleaned": true,
+  "results": [
+    {
+      "case": "A crea tutoria a nombre de B",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alta indebida creada: False"
+    },
+    {
+      "case": "A crea su propia tutoria",
+      "expected": "200 pendiente, ignora estado enviado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: pendiente"
+    },
+    {
+      "case": "Alumno acepta su tutoria",
+      "expected": "403 sin cambio de estado",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo profesor/admin puede cambiar estado"
+    },
+    {
+      "case": "Profesor acepta tutoria propia",
+      "expected": "200 con Calendar simulado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: aceptada"
+    },
+    {
+      "case": "GET sin token",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "GET token invalido",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Listado de A",
+      "expected": "200 sin recursos de B",
+      "http_status": 200,
+      "passed": true,
+      "observation": "lista excluye fixtures de B"
+    },
+    {
+      "case": "A consulta tutoria de B",
+      "expected": "403/404 sin datos ajenos",
+      "http_status": 403,
+      "passed": true,
+      "observation": "recurso ajeno devuelto: False"
+    },
+    {
+      "case": "A modifica tutoria de B",
+      "expected": "403/404 y mensaje intacto",
+      "http_status": 403,
+      "passed": true,
+      "observation": "cambio ajeno confirmado en BD: False"
+    },
+    {
+      "case": "A borra tutoria de B",
+      "expected": "403/404 y fila conservada",
+      "http_status": 403,
+      "passed": true,
+      "observation": "borrado ajeno confirmado en BD: False"
+    },
+    {
+      "case": "B consulta su tutoria",
+      "expected": "200 con recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "B modifica su tutoria",
+      "expected": "200 y mensaje actualizado",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario; no evalua transiciones de estado"
+    },
+    {
+      "case": "B borra su tutoria",
+      "expected": "200 y fila eliminada",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A modifica perfil de B",
+      "expected": "403 y nombre intacto",
+      "http_status": 403,
+      "passed": true,
+      "observation": "cambio ajeno confirmado en BD: False"
+    },
+    {
+      "case": "B modifica su propio perfil",
+      "expected": "200 sin cambio material",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A crea horario para profesor B",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alta indebida creada: False"
+    },
+    {
+      "case": "A desactiva horario de profesor B",
+      "expected": "403 y horario activo",
+      "http_status": 403,
+      "passed": true,
+      "observation": "estado persistido: activo"
+    },
+    {
+      "case": "Profesor crea su horario",
+      "expected": "200 y recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Profesor desactiva su horario",
+      "expected": "200 y estado inactivo",
+      "http_status": 200,
+      "passed": true,
+      "observation": "estado persistido: inactivo"
+    },
+    {
+      "case": "A usa ruta legacy de horario ajeno",
+      "expected": "403 sin crear recurso",
+      "http_status": 403,
+      "passed": true,
+      "observation": "ruta legacy tambien protegida"
+    },
+    {
+      "case": "A borra horario ajeno por ruta legacy",
+      "expected": "403 y horario activo",
+      "http_status": 403,
+      "passed": true,
+      "observation": "estado persistido: activo"
+    },
+    {
+      "case": "Sin token modifica categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno modifica categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin modifica categoria",
+      "expected": "200 y nombre persistido",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Sin token crea categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno crea categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin crea categoria",
+      "expected": "200 y recurso propio",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Sin token asocia profesor-categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno asocia profesor-categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de propietario"
+    },
+    {
+      "case": "Profesor asocia su categoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Profesor desasocia su categoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Sin token borra categoria",
+      "expected": "401",
+      "http_status": 401,
+      "passed": true,
+      "observation": "control de autenticacion"
+    },
+    {
+      "case": "Alumno borra categoria",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "control de rol administrativo"
+    },
+    {
+      "case": "Admin borra categoria",
+      "expected": "200 y recurso ausente",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo administrativo"
+    },
+    {
+      "case": "Listado solicitudes de A",
+      "expected": "200 sin solicitudes de B",
+      "http_status": 200,
+      "passed": true,
+      "observation": "lista filtrada por propietario"
+    },
+    {
+      "case": "A consulta solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno ajeno rechazado"
+    },
+    {
+      "case": "Profesor consulta solicitud abierta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "profesor puede responder solicitud abierta"
+    },
+    {
+      "case": "B consulta su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A crea solicitud para B",
+      "expected": "403 sin crear",
+      "http_status": 403,
+      "passed": true,
+      "observation": "usuarioId ajeno rechazado"
+    },
+    {
+      "case": "B crea su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B edita su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B cierra su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "B borra su solicitud",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A edita solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A cierra solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A borra solicitud de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "propietario requerido"
+    },
+    {
+      "case": "A consulta respuestas de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno ajeno rechazado"
+    },
+    {
+      "case": "Profesor consulta respuestas",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "profesor puede ver solicitud abierta"
+    },
+    {
+      "case": "B consulta respuestas propias",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "Alumno crea respuesta",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo profesor/admin"
+    },
+    {
+      "case": "Profesor crea respuesta ajena",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "idUsuario ajeno rechazado"
+    },
+    {
+      "case": "Profesor crea su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A edita respuesta de profesor",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "autor requerido"
+    },
+    {
+      "case": "Profesor edita su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A borra respuesta de profesor",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "autor requerido"
+    },
+    {
+      "case": "Profesor borra su respuesta",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo"
+    },
+    {
+      "case": "A acepta respuesta de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "solo propietario de la solicitud"
+    },
+    {
+      "case": "B acepta respuesta propia",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A califica tutoria de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "alumno participante requerido"
+    },
+    {
+      "case": "B califica su tutoria",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    },
+    {
+      "case": "A consulta calificacion de B",
+      "expected": "403",
+      "http_status": 403,
+      "passed": true,
+      "observation": "participante requerido"
+    },
+    {
+      "case": "B consulta su calificacion",
+      "expected": "200",
+      "http_status": 200,
+      "passed": true,
+      "observation": "control positivo del propietario"
+    }
+  ]
+}

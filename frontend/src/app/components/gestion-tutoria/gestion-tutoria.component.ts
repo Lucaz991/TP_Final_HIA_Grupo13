@@ -130,7 +130,7 @@ export class GestionTutoriaComponent implements OnInit {
 
   cargarProfesor(id: number) {
     //  Traemos los datos básicos del usuario
-    this.tutoriaService.obtenerUsuarios().subscribe({
+    this.tutoriaService.obtenerUsuarios(id).subscribe({
       next: (res: any) => {
         const listado = res.data || res;
         const userDetail = listado.find((u: any) => u.id === id);
@@ -287,7 +287,7 @@ export class GestionTutoriaComponent implements OnInit {
       next: (res: any) => {
         const tutoriaId = res.data?.id || res.id;
 
-        this.mpService.crearPreferencia(tutoriaId).subscribe({
+        this.mpService.crearPreferencia(tutoriaId, 'tutoria').subscribe({
           next: (mpRes: any) => {
             Swal.fire({
               icon: 'success',

@@ -26,11 +26,14 @@ autenticacionCtrl.signUpUsuario = async (req, res) => {
          description: 'Usuario registrado correctamente.',
          schema: { $ref: '#/definitions/SuccessResponse' }
        }
-       #swagger.responses[400] = { description: 'El email ya está registrado.' }
+       #swagger.responses[400] = { description: 'Datos inválidos, rol no permitido o email ya registrado.' }
        #swagger.responses[500] = { description: 'Error al registrar usuario.' }
     */
     try {
         const data = req.body;
+        if (!['alumno', 'profesor'].includes(data.rol)) {
+            return res.status(400).json({ status: 0, msg: 'El rol debe ser alumno o profesor.' });
+        }
 
         const existe = await Usuario.findOne({
             where: {
@@ -100,8 +103,11 @@ autenticacionCtrl.loginUsuario = async (req, res) => {
             }
         });
 
-        const coincide = await passwordService.comparePassword(req.body.password, user.contraseniaHash);
-        if (!user || !coincide) return res.json({ status: 0, msg: "not found" });
+        // Hash fijo para comparar cuando el usuario no existe:
+        // mantiene el costo de bcrypt uniforme y evita enumeración por tiempo de respuesta.
+        const hash = user ? user.contraseniaHash : '$2b$10$dXv56eYM1MUgJexfBjxUC.C4bHRHTIm.w9L9AGekrnV8DC0TmcY3q';
+        const coincide = await passwordService.comparePassword(req.body.password, hash);
+        if (!user || !coincide) return res.status(401).json({ status: 0, msg: "Credenciales inválidas." });
 
         else {
             const unToken = jwt.sign({id: user.id}, process.env.JWT_SECRET);
@@ -130,7 +136,8 @@ autenticacionCtrl.loginUsuario = async (req, res) => {
         }
 
     } catch (error) {
-        return res.json({ status: 0, msg: 'error' });
+        console.error('ERROR login:', error.message);
+        return res.status(500).json({ status: 0, msg: 'Error al iniciar sesión.' });
     }
 
 }
@@ -150,10 +157,14 @@ autenticacionCtrl.signUpGoogle = async (req, res) => {
          description: 'Usuario registrado correctamente.',
          schema: { $ref: '#/definitions/SuccessResponse' }
        }
+       #swagger.responses[400] = { description: 'El rol debe ser alumno o profesor.' }
        #swagger.responses[500] = { description: 'Error al registrar usuario.' }
     */
     try {
         const data = req.body;
+        if (!['alumno', 'profesor'].includes(data.rol)) {
+            return res.status(400).json({ status: 0, msg: 'El rol debe ser alumno o profesor.' });
+        }
 
         // Verificar que el token realmente proviene de Google
         const ticket = await client.verifyIdToken({

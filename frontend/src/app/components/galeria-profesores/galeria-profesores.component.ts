@@ -1,4 +1,5 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -14,8 +15,15 @@ import { HorarioDisponibleService } from '../../services/horario-disponible.serv
   templateUrl: './galeria-profesores.component.html',
   styleUrls: ['./galeria-profesores.component.css']
 })
-export class GaleriaProfesoresComponent implements OnInit {
+export class GaleriaProfesoresComponent implements OnInit, OnDestroy {
 
+  pagina = 1;
+  totalPaginas = 0;
+  totalProfesores = 0;
+  cargando = false;
+  errorCarga = '';
+  private peticion?: Subscription;
+  ngOnDestroy() { this.peticion?.unsubscribe(); }
   rol: string = '';
   categorias: any[] = [];
   profesores: any[] = [];
@@ -84,17 +92,28 @@ export class GaleriaProfesoresComponent implements OnInit {
     });
   }
 
-  cargarProfesores() {
-    this.tutoriaService.obtenerUsuarios().subscribe({
+  cargarProfesores(pagina = 1) {
+    this.peticion?.unsubscribe();
+    this.pagina = pagina;
+    this.cargando = true;
+    this.errorCarga = '';
+    this.profesorSeleccionado = null;
+    this.peticion = this.tutoriaService.obtenerProfesores(pagina, this.filtroCategoria,
+      this.criterioOrden, this.alumnoLat, this.alumnoLng).subscribe({
       next: (res: any) => {
-        const listado = Array.isArray(res) ? res : (res.data || []);
-
-        if (Array.isArray(listado)) {
-          this.profesores = listado.filter((u: any) => (u.rol || '').toLowerCase() === 'profesor');
-          this.cdr.detectChanges();
-        }
+        this.profesores = res.data || [];
+        this.totalPaginas = res.pagination.totalPages;
+        this.totalProfesores = res.pagination.total;
+        this.cargando = false;
+        this.cdr.detectChanges();
       },
-      error: (err: any) => console.error('Error al cargar profesores:', err)
+      error: (err: any) => {
+        console.error('Error al cargar profesores:', err);
+        this.profesores = [];
+        this.cargando = false;
+        this.errorCarga = 'No se pudieron cargar los profesores. Intentá nuevamente.';
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -119,6 +138,7 @@ export class GaleriaProfesoresComponent implements OnInit {
         (position) => {
           this.alumnoLat = position.coords.latitude;
           this.alumnoLng = position.coords.longitude;
+          this.cargarProfesores();
           this.cdr.detectChanges();
         },
         (error) => {
@@ -136,28 +156,12 @@ export class GaleriaProfesoresComponent implements OnInit {
   ordenarCambio() {
     if (this.criterioOrden === 'cercania' && (!this.alumnoLat || !this.alumnoLng)) {
       this.detectarUbicacionGPSAlumno();
+    } else {
+      this.cargarProfesores();
     }
   }
 
-  get profesoresFiltrados() {
-    let list = this.profesores;
-
-    if (this.filtroCategoria) {
-      list = list.filter(p =>
-        (p.categoriasEnseniadas || []).some((c: any) => c.id === Number(this.filtroCategoria))
-      );
-    }
-
-    if (this.criterioOrden === 'cercania' && this.alumnoLat != null && this.alumnoLng != null) {
-      list = [...list].sort((a, b) => {
-        const distA = this.calcularDistancia(this.alumnoLat, this.alumnoLng, a.lat, a.lng);
-        const distB = this.calcularDistancia(this.alumnoLat, this.alumnoLng, b.lat, b.lng);
-        return distA - distB;
-      });
-    }
-
-    return list;
-  }
+  get profesoresFiltrados() { return this.profesores; }
 
   toggleProfesor(profesor: any) {
     if (this.profesorSeleccionado?.id === profesor.id) {
