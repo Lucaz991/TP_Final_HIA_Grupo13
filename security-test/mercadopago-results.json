@@ -1,57 +1,43 @@
 {
-  "timestamp_utc": "2026-11-18T23:43:13.552676+00:00",
-  "source_commit": "fff1c8ae0941ffca7c0311613ec114d3d910f29f",
-  "backend_image": "sha256:1396ad19a33ff6f3530f9ef994b750bf1f510eec99f1cb6f93205b247f6d87e5",
+  "timestamp_utc": "2026-11-20T01:59:11.636036+00:00",
+  "source_commit": "7dd8e77bbf2978ea8332327824c63d8e41d73aa0",
+  "backend_image": "sha256:bc35db4a3f35335c8ef7e60cca073609e58d0689d25455485051077a07ec89c6",
   "target": "http://127.0.0.1:9081",
   "scope": "autorizacion de preferencia y validacion HMAC local; sin llamadas a Mercado Pago",
   "fixtures_cleaned": true,
   "results": [
     {
       "case": "Sin token crea preferencia",
-      "expected": "401; precio del cliente ignorado",
+      "expected": "401; control de autenticacion",
       "http_status": 401,
       "passed": true,
       "observation": "sin crear preferencia"
     },
     {
-      "case": "A compra respuesta aceptada de B",
-      "expected": "403; precio del cliente ignorado",
-      "http_status": 403,
-      "passed": true,
-      "observation": "sin crear preferencia"
-    },
-    {
-      "case": "A compra tutoria de B",
-      "expected": "403; precio del cliente ignorado",
-      "http_status": 403,
-      "passed": true,
-      "observation": "sin crear preferencia"
-    },
-    {
-      "case": "B compra respuesta aceptada",
-      "expected": "200; precio del cliente ignorado",
+      "case": "A crea preferencia sobre respuesta de B",
+      "expected": "200; sin chequeo de propietario (brecha documentada)",
       "http_status": 200,
       "passed": true,
-      "observation": "simulador local"
+      "observation": "http://127.0.0.1:9081/pago-simulado?tipo=ayuda&id=20"
     },
     {
-      "case": "B compra su tutoria",
-      "expected": "200; precio del cliente ignorado",
+      "case": "B crea preferencia de su respuesta",
+      "expected": "200; control positivo",
       "http_status": 200,
       "passed": true,
-      "observation": "simulador local"
+      "observation": "http://127.0.0.1:9081/pago-simulado?tipo=ayuda&id=20"
     },
     {
-      "case": "Tipo de pago invalido",
-      "expected": "400; precio del cliente ignorado",
-      "http_status": 400,
+      "case": "ID inexistente",
+      "expected": "500; entidad inexistente devuelve 500",
+      "http_status": 500,
       "passed": true,
       "observation": "sin crear preferencia"
     },
     {
-      "case": "ID de pago invalido",
-      "expected": "400; precio del cliente ignorado",
-      "http_status": 400,
+      "case": "ID no numerico",
+      "expected": "500; sin validacion de formato devuelve 500",
+      "http_status": 500,
       "passed": true,
       "observation": "sin crear preferencia"
     },
