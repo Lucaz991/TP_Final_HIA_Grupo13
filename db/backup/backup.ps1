@@ -141,7 +141,10 @@ finally {
     Write-Host "Registro: $registro"
 
     # --- ENVIAR RESULTADO A N8N ---
-    $webhookUrl = "http://localhost:5678/webhook-test/backup-verificacion" 
+    $webhookUrl = $env:BACKUP_HOST_WEBHOOK_URL
+    if (-not $webhookUrl) {
+        $webhookUrl = 'http://localhost:5678/webhook/backup-verificacion'
+    }
     try {
         Invoke-RestMethod -Uri $webhookUrl -Method Post -ContentType "application/json; charset=utf-8" -Body $jsonPayload | Out-Null
         Write-Host "Notificado a n8n correctamente."

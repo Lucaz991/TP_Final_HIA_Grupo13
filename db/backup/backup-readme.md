@@ -8,6 +8,8 @@ Generar copias de seguridad de `tpFinal` y comprobar su recuperación en una ins
 
 | Archivo | Función |
 |---|---|
+| `Dockerfile` e `iniciar-backup.sh` | Construyen el servicio y configuran la tarea diaria de cron. |
+| `backup.sh` | Genera el respaldo programado y envía su resultado a n8n. |
 | `backup.ps1` | Genera un respaldo Custom, verifica su inventario y transferencia y registra tamaño, tiempos y SHA-256. |
 | `restaurar.ps1` | Verifica el respaldo y lo restaura en una base de prueba vacía, registrando duración y resultado. |
 
@@ -35,27 +37,12 @@ La restauración de prueba utiliza `--no-owner --no-privileges`: no reproduce lo
 
 ## Servicio dedicado de backup
 
-El servicio `backup` utiliza `postgres:18` como contenedor de herramientas.
-No inicia otro servidor PostgreSQL ni publica puertos.
-
-Configuración dentro de `services` en `compose.yaml`:
-
-```yaml
-  backup:
-    image: postgres:18
-    restart: unless-stopped
-    entrypoint: ["sleep", "infinity"]
-    environment:
-      DB_ADMIN_USER: ${DB_ADMIN_USER}
-      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
-    networks:
-      - redtpfinal
-```
+El servicio `backup` usa una imagen basada en `postgres:18` y ejecuta cron. Conserva las herramientas de PostgreSQL para ejecutar también el respaldo manual.
 
 Para iniciarlo:
 
 ```powershell
-docker compose up -d --no-deps backup
+docker compose up -d --build --no-deps backup
 ```
 
 El recorrido del respaldo es:
@@ -67,9 +54,34 @@ Requiere Docker, el servicio backup, HAProxy y un líder accesible.
 Si la conexión se interrumpe durante el respaldo, la ejecución falla
 y debe generarse un archivo nuevo. 
 
-La ejecución se inicia manualmente desde PowerShell. 
+### Respaldo programado
 
-## 1. Ejecutar el backup
+Cron ejecuta `backup.sh` a las **03:00 am**. El script comprueba el líder, genera el dump Custom, lee el inventario y registra el SHA-256. El dump se publica con su extensión definitiva después de esas verificaciones. Para verificar la recuperación, usá `restaurar.ps1` y las consultas de esta guía.
+
+| Variable de Compose | Valor predeterminado |
+|---|---|
+| `BACKUP_SCHEDULE` | `0 3 * * *` |
+| `BACKUP_DIR` | `../Respaldos`, relativo a la carpeta de `compose.yaml` |
+| `BACKUP_WEBHOOK_URL` | `http://n8n:5678/webhook/backup-verificacion` |
+
+Configurá los valores que quieras cambiar en `.env` y volvé a ejecutar el comando de inicio para aplicar los cambios. La PC y el stack deben estar funcionando a la hora programada. Los archivos quedan en el disco de la PC que los genera.
+
+Para probar la generación bajo demanda y ver el resultado:
+
+```powershell
+docker compose exec backup /usr/local/bin/backup.sh
+docker compose logs backup
+```
+
+Para probar cron, configurá temporalmente `BACKUP_SCHEDULE="* * * * *"`, recreá el servicio con el comando de inicio y comprobá que aparezca un nuevo dump y su JSON sin ejecutar el script a mano. Volvé a configurar el horario diario al terminar.
+
+### Avisos a n8n
+
+Publicá el flujo actual con el webhook de producción `POST /webhook/backup-verificacion`. El respaldo programado guarda y envía un JSON con los estados `backup_verificado_restauracion_pendiente` y `fallido`. El campo `archivo` del evento programado indica la ruta dentro del contenedor bajo `/backups`. El mismo nombre de archivo está disponible en la carpeta montada del host.
+
+Los scripts PowerShell usan `http://localhost:5678/webhook/backup-verificacion`. Para usar otra URL, definí `$env:BACKUP_HOST_WEBHOOK_URL` en PowerShell. Si n8n no responde, revisá el registro local y los logs. Si la PC está apagada a la hora programada, cron no ejecuta el backup ni se emite un evento.
+
+## 1. Ejecutar el backup manualmente
 
 Desde PowerShell, en la raíz del proyecto:
 
