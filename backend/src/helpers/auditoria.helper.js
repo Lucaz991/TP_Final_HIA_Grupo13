@@ -17,7 +17,7 @@ const registrarAuditoria = async (
                 usuarioId ||
                 req.user?.id ||
                 req.usuario?.id ||
-                req.body.id_usuario ||
+                req.body?.id_usuario ||
                 null,
 
             accion,

@@ -6,6 +6,11 @@ const Tutoria = require('../models/tutoria.model');
 const categoriaCtrl = {};
 const { Op, where } = require('sequelize');
 
+const getUsuarioActual = async (req) => Usuario.findByPk(req.userId);
+
+const puedeGestionarProfesor = (usuario, profesorId) =>
+    usuario.rol === 'admin' || (usuario.rol === 'profesor' && usuario.id === Number(profesorId));
+
 categoriaCtrl.getCategorias = async (req, res) => {
     /* #swagger.tags = ['Categorias']
        #swagger.summary = 'Listar todas las categorías'
@@ -47,7 +52,7 @@ categoriaCtrl.getCategoria = async (req, res) => {
     */
     try {
         const categoria = await Categoria.findByPk(req.params.id);
-        if (!categoria) return res.json({ status: 0, msg: 'Categoría no encontrada' });
+        if (!categoria) return res.status(404).json({ status: 0, msg: 'Categoría no encontrada' });
         res.json({ status: 1, msg: 'success', data: categoria });
     } catch (error) {
         res.status(500).json({ status: 0, msg: 'Error al obtener categoría' });
@@ -74,6 +79,7 @@ categoriaCtrl.createCategoria = async (req, res) => {
     try {
         const nueva = await Categoria.create({
             nombre: req.body.nombre,
+            nivel: req.body.nivel,
             descripcion: req.body.descripcion
         });
         res.json({ status: 1, msg: 'Categoría creada correctamente', data: nueva });
@@ -106,10 +112,11 @@ categoriaCtrl.editCategoria = async (req, res) => {
        #swagger.responses[500] = { description: 'Error al actualizar categoría.' }
     */
     try {
-        await Categoria.update({
-            nombre: req.body.nombre,
-            descripcion: req.body.descripcion
-        }, { where: { id: req.params.id } });
+        const cambios = {};
+        for (const campo of ['nombre', 'nivel', 'descripcion']) {
+            if (req.body[campo] !== undefined) cambios[campo] = req.body[campo];
+        }
+        await Categoria.update(cambios, { where: { id: req.params.id } });
         res.json({ status: 1, msg: 'Categoría actualizada correctamente' });
     } catch (error) {
         res.status(500).json({ status: 0, msg: 'Error al actualizar categoría' });
@@ -160,8 +167,13 @@ categoriaCtrl.asociarProfesor = async (req, res) => {
     */
     try {
         const { profesorId, categoriaId } = req.body;
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!puedeGestionarProfesor(usuario, profesorId)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede asociar categorías a su propio perfil de profesor.' });
+        }
 
-        const profesor = await Usuario.findByPk(profesorId);
+        const profesor = await Usuario.findOne({ where: { id: profesorId, rol: 'profesor' } });
         const categoria = await Categoria.findByPk(categoriaId);
         if (!profesor || !categoria) return res.status(400).json({ status: 0, msg: 'El profesor o la categoría especificada no es válida.' });
 
@@ -201,6 +213,11 @@ categoriaCtrl.desasociarProfesor = async (req, res) => {
     */
     try {
         const { profesorId, categoriaId } = req.body;
+        const usuario = await getUsuarioActual(req);
+        if (!usuario) return res.status(401).json({ status: 0, msg: 'Sesión requerida.' });
+        if (!puedeGestionarProfesor(usuario, profesorId)) {
+            return res.status(403).json({ status: 0, msg: 'Solo puede quitar categorías de su propio perfil de profesor.' });
+        }
 
         const relacion = await ProfesorCategoria.findOne({ where: { profesorId, categoriaId } });
         if (!relacion) return res.status(400).json({ status: 0, msg: 'La asociación no existe.' });

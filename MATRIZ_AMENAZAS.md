@@ -9,11 +9,52 @@
 > La validación actual y los entregables pendientes se coordinan en
 > [H24_SEGURIDAD_INCIDENTES.md](H24_SEGURIDAD_INCIDENTES.md).
 >
-> **Revisión necesaria:** incluir explícitamente ransomware, cadena de suministro,
-> fallas de autorización entre usuarios, abuso de API/webhooks y riesgos de IA.
-> JWT no garantiza protección CSRF, bcrypt no valida tokens JWT y una red Docker
-> compartida no equivale a segmentación. Verificar cada control en su contexto
-> antes de asignarle eficacia o marcarlo como implementado.
+> **Revisión al 19/11/2026:** la tabla de validación ya cubre ransomware
+> (AM-24), cadena de suministro (AM-23), fallas de autorización entre usuarios
+> (AM-16 a AM-20), abuso de API/webhooks (AM-21), riesgos de IA (AM-22),
+> DDoS (AM-04), robo de credenciales (AM-05/AM-14) y exposición de red
+> (AM-11). JWT no garantiza protección CSRF, bcrypt no valida tokens JWT y una
+> red Docker compartida no equivale a segmentación. Verificar cada control en
+> su contexto antes de asignarle eficacia o marcarlo como implementado.
+
+## Validación actual H24 — 18/11/2026
+
+| ID | Amenaza | Evidencia actual | Impacto / prioridad | Control faltante | Estado |
+|---|---|---|---|---|---|
+| AM-16 / H24-AUTH-01 | Acceso a tutorías ajenas por ID (BOLA/IDOR) | Falla inicial confirmada y retest integrado aprobado en H24 | Alto; integración pendiente | Autorización por recurso en GET/PUT/DELETE y control de campos por rol | Corregido en laboratorio; despliegue pendiente |
+| AM-17 / H24-AUTH-02 | Modificación del perfil de otro usuario por ID | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Comparar `:id` con JWT/admin y limitar campos actualizables | Corregido en laboratorio; despliegue pendiente |
+| AM-18 / H24-AUTH-03 | Alta/desactivación de horarios de otro profesor | Falla confirmada en BD y retest 403/200 aprobado | Alto; integración pendiente | Validar `profesorId` con JWT en rutas actual y legacy | Corregido en laboratorio; despliegue pendiente |
+| AM-19 / H24-BFLA-01 | Funciones de categorías sin autenticación ni rol | Acciones sin token confirmadas y retest 401/403/200 aprobado | Alto; integración pendiente | `verifyToken`, `verifyAdmin` y propiedad del profesor en asociaciones | Corregido en laboratorio; despliegue pendiente |
+| AM-20 / H24-AUTH-04 | Solicitudes, respuestas y calificaciones ajenas por ID | Operaciones cruzadas confirmadas y retest 403/200 aprobado | Alto; integración pendiente | Validar propietario, autor, rol profesor y participación en la solicitud/tutoría | Corregido en laboratorio; despliegue pendiente |
+| AM-21 / H24-MP-01 | Pago de recursos ajenos y webhook falsificable de Mercado Pago | 13/13 casos de autorización y firma HMAC aprobados contra simulador local | Crítico; integración y validación del proveedor pendientes | Firma `x-signature`, tipo/ID explícito, pagador propietario, URL configurable, importe servidor e idempotencia | Corregido en laboratorio; despliegue y secreto real pendientes |
+| AM-01 / H24-SQLI-01 | Inyección SQL en rutas, filtros, búsquedas admin y login | 37/37 probes controlados sin ejecución ni cambios en tablas | Residual: alcance limitado a endpoints y técnicas seleccionadas | Mantener parametrización y validación; repetir si cambian consultas o se agregan endpoints | Probado en laboratorio; no hallada en el alcance ejecutado |
+| AM-22 / H24-IA-01 | Chatbot: tutorías ajenas en el contexto, cuota sin límite e inyección indirecta vía comentarios | Contexto filtrado por usuario, 429 en request 21, 400 por mensaje inválido y adaptador local verificados | Alto; respuesta del modelo real pendiente | Scope por propietario, limitador por `userId`, máximo 1000 caracteres, comentarios fuera del contexto y timeout de 15 s | Corregido en laboratorio; proveedor e inyección directa residual pendientes |
+| AM-23 / H24-SCAN-01 | Vulnerabilidades de dependencias e imágenes (supply chain) | npm audit + Trivy 19/11/2026: backend 2 moderadas, frontend 19 (`xlsx` alta sin fix), postgres:18.6 con 2 críticas, backend/frontend con fix por rebuild | Alto; remediación parcial por rebuild y decisión sobre `xlsx` | Rebuild `--pull`, `npm audit fix` de cadena de build, evaluar reemplazo de `xlsx`, pin de `latest`, re-escaneo tras despliegue | Analizado; remediaciones propuestas |
+| AM-04 / H24-DDOS-01 | DDoS sobre la aplicación publicada | Borde en Cloudflare (oculta el origen y absorbe L3/L4), limitadores de login 5/15min y de chat 20/15min por usuario | Alto residual: sin prueba de saturación acordada | Revisar límites globales en Nginx/Cloudflare, alertas de consumo y plan de escalado | Analizado; mitigación por diseño de borde |
+| AM-24 / H24-RANSOM-01 | Ransomware sobre datos y volúmenes Docker | Servicio `backup` interno y restauración verificada y documentada por el equipo; clúster Patroni replicado | Crítico residual: respaldo reside en el mismo host/motor | Copia externa o inmutable, procedimiento de respuesta, separar credenciales de respaldo | Analizado; restauración evidenciada por el equipo |
+| AM-05 / AM-14 / H24-CRED-01 / H24-ERR-01 | Robo y fuerza bruta de credenciales | bcrypt + JWT + limitador de login por IP real (`trust proxy` verificado); login devuelve 401 uniforme con comparación bcrypt constante (sin enumeración por timing); Gitleaks 8.30.1 sobre 71 commits sin secretos reales; `.env` fuera del repo y credenciales del lab separadas | Medio residual: spoofing de XFF solo desde la red interna | MFA opcional en paneles, borrar `gitleaks-report.json` del historial | Verificado: limitador, login normalizado e historial |
+| AM-11 / H24-NET-01 | Exposición de puertos y superficie de red | Compose revisado: todos los binds a `127.0.0.1`; publicación solo por túnel saliente; laboratorio con un único puerto | Medio | Mantener la regla "sin binds a 0.0.0.0", re-verificar tras cambios de compose | Verificado por configuración |
+| AM-25 / H24-INFRA-01 | Configuración insegura de infraestructura Docker | Grafana `admin/admin` corregido; revisión completa documentada (H24-INFRA-01): `privileged` en sandbox, `env_file` completo a n8n, `latest`, restart y etcd sin auth | Alto residual hasta aplicar remediaciones | Env acotado a n8n, restart uniforme, pin de `latest`, healthchecks y límites | Corregido lo crítico; backlog de hardening documentado |
+
+El JWT impidió acceso sin token válido y el listado filtró por usuario, pero
+ninguno de esos controles evitó el acceso individual a recursos ajenos.
+La explotación se confirmó solo en el laboratorio, no en producción. El retest
+integrado cubrió **62/62** casos; la matriz de Mercado Pago agregó **13/13**
+casos contra el adaptador local, sin llamadas al proveedor real.
+Ver [resultados y plan de acción](INFORME_VULNERABILIDADES.md#validación-actual-h24--18112026),
+[autorización](security-test/authorization-results.json) y
+[pagos](security-test/mercadopago-results.json).
+
+**Decisión de publicación (19/11/2026):** el grupo descartó Cloudflare Access.
+GLPI, Nextcloud, n8n y Grafana se publican con su propia autenticación y
+Prometheus queda sin hostname (`grafana.hia-26.com` reemplaza a `monitor.`).
+Riesgo aceptado: sin una capa adicional en el borde, la seguridad de esos
+paneles depende por completo de la fortaleza de sus credenciales; se
+recomienda revisión de passwords y no reutilizar las del sistema.
+
+Las estimaciones y marcas históricas siguientes no reemplazan esta verificación.
+
+## Antecedente original
 
 **Responsable:** Matias (MC)
 **Fecha:** 4 de noviembre de 2026

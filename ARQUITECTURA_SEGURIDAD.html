@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitectura de seguridad — TP Final HIA Grupo 13</title>
+<style>
+:root {
+  --bg: #0b1020;
+  --panel: #111a2e;
+  --panel-2: #16233d;
+  --text: #edf3ff;
+  --muted: #a9b8d8;
+  --line: #304364;
+  --accent: #62d0ff;
+  --ok: #4ade80;
+  --warn: #facc15;
+  --risk: #fb7185;
+  --info: #a78bfa;
+  --shadow: 0 18px 60px rgba(0,0,0,.38);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(98,208,255,.14), transparent 28rem),
+    radial-gradient(circle at 85% 10%, rgba(167,139,250,.12), transparent 30rem),
+    var(--bg);
+}
+header {
+  padding: 32px clamp(18px, 4vw, 56px) 18px;
+  border-bottom: 1px solid var(--line);
+}
+header h1 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 48px); letter-spacing: -.03em; }
+header p { max-width: 1050px; margin: 0; color: var(--muted); line-height: 1.55; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.badge {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.045);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 13px;
+}
+.badge.ok { color: var(--ok); border-color: rgba(74,222,128,.35); }
+.badge.warn { color: var(--warn); border-color: rgba(250,204,21,.35); }
+.badge.info { color: var(--info); border-color: rgba(167,139,250,.35); }
+main { padding: 24px clamp(18px, 4vw, 56px) 48px; }
+.card {
+  background: linear-gradient(180deg, rgba(22,35,61,.94), rgba(17,26,46,.96));
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 22px;
+}
+.card h2 { margin: 0 0 14px; font-size: 22px; }
+.card h3 { margin: 0 0 8px; font-size: 17px; }
+.card p, .card li { color: var(--muted); line-height: 1.55; }
+.toolbar, .flowbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+button {
+  color: var(--text);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font: inherit;
+  transition: transform .15s, border-color .15s, background .15s;
+}
+button:hover { transform: translateY(-1px); border-color: var(--accent); }
+button.active { border-color: var(--accent); background: rgba(98,208,255,.16); color: #dff6ff; }
+.diagram-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+}
+.diagram-scroll {
+  min-height: 620px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(3,8,20,.38);
+}
+svg { display: block; width: 100%; min-width: 1000px; height: auto; }
+.zone {
+  fill: rgba(98,208,255,.035);
+  stroke: rgba(98,208,255,.18);
+  stroke-dasharray: 7 7;
+  rx: 18px;
+}
+.zone-label { fill: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.edge {
+  fill: none;
+  stroke: #566f9c;
+  stroke-width: 2.5;
+  marker-end: url(#arrow);
+}
+.edge-label { fill: #8ea4ca; font-size: 11px; paint-order: stroke; stroke: #0b1020; stroke-width: 4px; }
+.edge.active {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-dasharray: 8 7;
+  animation: move 1s linear infinite;
+}
+@keyframes move { to { stroke-dashoffset: -15; } }
+.node rect {
+  fill: #172845;
+  stroke: #46608e;
+  stroke-width: 1.5;
+  rx: 14px;
+  filter: drop-shadow(0 8px 14px rgba(0,0,0,.28));
+}
+.node text { fill: var(--text); font-size: 14px; font-weight: 700; }
+.node .sub { fill: var(--muted); font-size: 11px; font-weight: 500; }
+.node:hover rect { stroke: var(--accent); }
+.node.active rect { stroke: var(--accent); stroke-width: 3; fill: #17385c; }
+.node.status-active rect { stroke: rgba(74,222,128,.65); }
+.node.status-partial rect { stroke: rgba(250,204,21,.72); }
+.node.status-pending rect { stroke: rgba(251,113,133,.72); }
+.node.external rect { fill: #1b2540; stroke-dasharray: 4 4; }
+.details {
+  background: rgba(3,8,20,.35);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+  min-height: 620px;
+}
+.details h2 { margin-top: 0; }
+.details .status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 5px 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.status.active { color: var(--ok); background: rgba(74,222,128,.12); }
+.status.partial { color: var(--warn); background: rgba(250,204,21,.12); }
+.status.pending { color: var(--risk); background: rgba(251,113,133,.12); }
+.steps { counter-reset: step; padding-left: 0; }
+.steps li {
+  list-style: none;
+  position: relative;
+  padding-left: 34px;
+  margin: 12px 0;
+}
+.steps li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(98,208,255,.16);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
+}
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 22px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+.test {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(255,255,255,.035);
+}
+.test .score { font-size: 30px; font-weight: 800; margin: 8px 0; }
+.test.pass .score { color: var(--ok); }
+.test.partial .score { color: var(--warn); }
+.test.pending .score { color: var(--risk); }
+.test small { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--text); background: rgba(98,208,255,.08); }
+td { color: var(--muted); }
+code {
+  color: #dff6ff;
+  background: rgba(98,208,255,.12);
+  border: 1px solid rgba(98,208,255,.18);
+  border-radius: 7px;
+  padding: 2px 6px;
+}
+.legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.risk { background: var(--risk); }
+.callout {
+  border-left: 4px solid var(--warn);
+  background: rgba(250,204,21,.08);
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: var(--muted);
+}
+a { color: var(--accent); }
+@media (max-width: 1050px) {
+  .diagram-layout, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .details, .diagram-scroll { min-height: auto; }
+}
+@media print {
+  body { background: white; color: #111; }
+  .card, .details, .test { box-shadow: none; background: white; color: #111; border-color: #bbb; }
+  p, li, td, .badge, .test small { color: #333 !important; }
+  button { display: none; }
+  svg { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Arquitectura de seguridad</h1>
+  <p>
+    Vista interactiva para explicar el flujo real del TP: publicación por Cloudflare,
+    servicios Docker, PostgreSQL con Patroni, controles del backend y laboratorio
+    aislado H24. Hacé clic en cada nodo y cambiá entre producción y laboratorio.
+  </p>
+  <div class="badges">
+    <span class="badge ok">Laboratorio verificado</span>
+    <span class="badge ok">62/62 autorización · 37/37 SQLi · 13/13 Mercado Pago simulado</span>
+    <span class="badge warn">Producción y proveedores pendientes</span>
+    <span class="badge info">Dominio: hia-26.com</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Mapa interactivo</h2>
+    <div class="toolbar" aria-label="Seleccionar entorno">
+      <button id="btn-production" type="button" class="active">Producción / publicación</button>
+      <button id="btn-lab" type="button">Laboratorio H24 aislado</button>
+    </div>
+    <div id="flowButtons" class="flowbar" aria-label="Seleccionar flujo"></div>
+    <div class="diagram-layout">
+      <div class="diagram-scroll"><svg id="diagram" viewBox="0 0 1200 620" role="img" aria-label="Diagrama de arquitectura"></svg></div>
+      <aside id="details" class="details" aria-live="polite"></aside>
+    </div>
+    <div class="legend" style="margin-top:14px">
+      <span><i class="dot ok"></i> Control verificado en laboratorio</span>
+      <span><i class="dot warn"></i> Parcial o depende de configuración</span>
+      <span><i class="dot risk"></i> Pendiente de validación</span>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <article class="card">
+      <h2>Defensa en capas</h2>
+      <ol class="steps">
+        <li><strong>Borde:</strong> Cloudflare termina TLS y publica hostnames por túnel. La app queda pública; el webhook de Mercado Pago se autentica por firma HMAC, no por JWT. Los paneles administrativos se protegen con la autenticación propia de cada servicio (decisión del grupo, sin Cloudflare Access).</li>
+        <li><strong>Frontend/Nginx:</strong> sirve Angular y actúa como proxy a `/api/`. En el laboratorio aplica una CSP local deliberadamente restrictiva.</li>
+        <li><strong>Backend/API:</strong> JWT para sesión, rol para funciones administrativas, propiedad/participación para recursos, validación de entradas, rate limit de login y firma HMAC del webhook.</li>
+        <li><strong>Datos:</strong> backend no habla directo con los nodos PostgreSQL; entra por HAProxy. Patroni + etcd administran el clúster y la replicación.</li>
+        <li><strong>Operación:</strong> Prometheus, exporters, Grafana, Alertmanager, GLPI, Nextcloud, n8n y backup forman el plano operativo. Todavía falta cerrar el circuito completo de incidente y restauración.</li>
+      </ol>
+    </article>
+    <article class="card">
+      <h2>Dominios y exposición</h2>
+      <table>
+        <thead><tr><th>Hostname</th><th>Destino interno</th><th>Acceso esperado</th></tr></thead>
+        <tbody>
+          <tr><td><code>tutorias.hia-26.com</code></td><td><code>app-frontend:80</code></td><td>Público; webhook MP público por firma</td></tr>
+          <tr><td><code>glpi.hia-26.com</code></td><td><code>glpi:80</code></td><td>Auth propia de GLPI</td></tr>
+          <tr><td><code>docs.hia-26.com</code></td><td><code>nextcloud:80</code></td><td>Auth propia de Nextcloud</td></tr>
+          <tr><td><code>n8n.hia-26.com</code></td><td><code>n8n:5678</code></td><td>Auth propia de n8n</td></tr>
+          <tr><td><code>grafana.hia-26.com</code></td><td><code>grafana:3000</code></td><td>Auth propia de Grafana</td></tr>
+        </tbody>
+      </table>
+      <p class="callout">
+        En Docker Compose los puertos publicados quedan ligados a <code>127.0.0.1</code>.
+        La exposición pública depende del túnel; no abrir puertos del host hacia LAN salvo necesidad.
+      </p>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>Pruebas ejecutadas hasta ahora</h2>
+    <div class="grid-3">
+      <article class="test pass">
+        <h3>Laboratorio H24</h3>
+        <div class="score">PASS</div>
+        <small>Topología, redes, puertos, aislamiento TCP, CSP local, login local, 401/403/200 y adaptadores.</small>
+      </article>
+      <article class="test pass">
+        <h3>Autorización</h3>
+        <div class="score">62/62</div>
+        <small>Tutorías, perfil, horarios, categorías, solicitudes, respuestas y calificaciones.</small>
+      </article>
+      <article class="test pass">
+        <h3>SQLi controlado</h3>
+        <div class="score">37/37</div>
+        <small>Rutas, filtros, búsquedas admin y login; sin cambios en tablas ni extracción.</small>
+      </article>
+      <article class="test pass">
+        <h3>Mercado Pago local</h3>
+        <div class="score">13/13</div>
+        <small>Autorización de preferencia y firma HMAC del webhook contra adaptador simulado.</small>
+      </article>
+      <article class="test partial">
+        <h3>Seguridad web</h3>
+        <div class="score">Parcial</div>
+        <small>Falta ZAP/sqlmap acotado y validación de headers/CSP del entorno publicado.</small>
+      </article>
+      <article class="test pass">
+        <h3>Chat / IA</h3>
+        <div class="score">Corregido</div>
+        <small>Contexto por propietario, 20 msg/15min por usuario, máx. 1000 chars, comentarios fuera del prompt.</small>
+      </article>
+      <article class="test partial">
+        <h3>Dependencias / imágenes</h3>
+        <div class="score">Escaneado</div>
+        <small>npm audit + Trivy 19/11: `xlsx` alta sin fix, postgres 18.6 con 2 críticas, backend/frontend remediales por rebuild.</small>
+      </article>
+      <article class="test pending">
+        <h3>Producción</h3>
+        <div class="score">Pendiente</div>
+        <small>No hay retest posterior a despliegue ni validación real del webhook de Mercado Pago.</small>
+      </article>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Qué volver a ejecutar y cuándo</h2>
+    <table>
+      <thead><tr><th>Cambio realizado</th><th>Comando / verificación</th><th>Resultado esperado</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Cambios de red, Compose, Nginx o adaptadores del laboratorio</td>
+          <td><code>python security-test/verify.py</code></td>
+          <td>Verificación base correcta y un solo puerto local expuesto.</td>
+        </tr>
+        <tr>
+          <td>Cambios en controladores, roles, propiedad o modelos</td>
+          <td><code>python security-test/verify.py --authorization</code></td>
+          <td>62/62 o la matriz ampliada completa.</td>
+        </tr>
+        <tr>
+          <td>Cambios en consultas, filtros, paginación o Sequelize</td>
+          <td><code>python security-test/verify.py --sqli</code></td>
+          <td>37/37 sin ejecución, delays ni fugas de errores SQL.</td>
+        </tr>
+        <tr>
+          <td>Cambios en pagos, webhook, variables MP o rutas</td>
+          <td><code>python security-test/verify.py --mercadopago</code></td>
+          <td>13/13 contra simulador; sin credenciales reales.</td>
+        </tr>
+        <tr>
+          <td>Después de integrar/desplegar la rama</td>
+          <td>Repetir las tres matrices + validación manual de dominio, TLS y headers</td>
+          <td>Misma conducta en producción, con evidencia separada del laboratorio.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="grid-2">
+    <article class="card">
+      <h2>Controles pendientes</h2>
+      <ul>
+        <li>Respuestas normalizadas (H24-ERR-01): IDs malformados → 400, login → 401 uniforme, inexistente → 404. Verificado + regresión 62/62.</li>
+        <li>ZAP/sqlmap acotado o justificación formal de la matriz propia.</li>
+        <li>Headers/CSP de producción, no solo la CSP restrictiva del laboratorio.</li>
+        <li>Re-escaneo Trivy de las imágenes desplegadas; decidir `xlsx` y rebuild `--pull`. Gitleaks ya pasó: sin secretos en 71 commits.</li>
+        <li>Aplicar backlog de Compose (H24-INFRA-01): env acotado a n8n, restart uniforme, pin de `latest`, healthchecks.</li>
+        <li>Permisos del workflow CI/CD, escaneos en pipeline y protecciones de rama en GitHub.</li>
+        <li>Revisar fortaleza de credenciales de GLPI/Nextcloud/n8n/Grafana: son la única barrera (Access descartado).</li>
+        <li>Procedimiento de incidente, simulacro y restauración desde backup en base descartable.</li>
+        <li>Chat/IA: evaluar la respuesta del modelo real frente a prompt injection directa y documentar el envío de PII a Groq.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h2>Mensaje para explicar al equipo</h2>
+      <ol class="steps">
+        <li>Internet no entra directo al servidor: entra por Cloudflare y el túnel resuelve servicios internos.</li>
+        <li>Los puertos Docker quedan en localhost; GLPI, Nextcloud, n8n y Grafana piden su propia cuenta.</li>
+        <li>La API no confía en el frontend: cada request pasa por JWT, rol y propiedad del recurso.</li>
+        <li>Los pagos no confían en el body: el webhook exige firma y el backend consulta el estado real del pago.</li>
+        <li>La base no queda expuesta: el backend usa HAProxy y el clúster Patroni/etcd queda en una red separada.</li>
+        <li>Las pruebas destructivas no tocan producción: H24 usa base, credenciales, volumen, puertos y adaptadores propios.</li>
+      </ol>
+      <p class="callout">
+        Importante: los resultados actuales demuestran controles en el laboratorio.
+        No afirmar que producción está validada hasta repetir las pruebas después del despliegue.
+      </p>
+    </article>
+  </section>
+</main>
+
+<script>
+const esc = value => String(value).replace(/[&<>"']/g, char => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[char]));
+
+const architectures = {
+  production: {
+    title: 'Producción / publicación segura',
+    zones: [
+      {x: 520, y: 22, w: 650, h: 190, label: 'Docker host · redtpfinal + red-patroni'},
+      {x: 520, y: 160, w: 650, h: 370, label: 'Servicios internos · redtpfinal'}
+    ],
+    nodes: [
+      {id:'internet', x:25, y:82, w:130, h:64, type:'external', status:'partial', title:'Usuario / Internet', subtitle:'Navegador público', meta:'HTTPS hacia hia-26.com', details:'Entrada pública. No conecta directamente a los puertos Docker del host.', controls:['TLS en Cloudflare','DNS público','Sin exposición directa de backend/base']},
+      {id:'mp', x:25, y:260, w:130, h:64, type:'external', status:'partial', title:'Mercado Pago', subtitle:'Webhook proveedor', meta:'POST /api/mercadopago/webhook', details:'Debe llegar públicamente al dominio de la app. No puede completar JWT ni Cloudflare Access.', controls:['x-signature + x-request-id','HMAC-SHA256','Timestamp ±5 minutos','Consulta posterior del pago real']},
+      {id:'cf', x:190, y:82, w:145, h:64, status:'partial', title:'Cloudflare', subtitle:'TLS + DNS + Tunnel', meta:'Edge público', details:'Termina TLS y enruta hostnames. Sin Access: cada servicio administrativo valida con su propia cuenta.', controls:['TLS público','DDoS/edge protection','Webhook público']},
+      {id:'tunnel', x:380, y:82, w:135, h:64, status:'partial', title:'cloudflared', subtitle:'Named Tunnel', meta:'Sin puerto entrante', details:'Conector saliente hacia Cloudflare. Puede tener réplicas; el público ve la máquina que responde.', controls:['TUNNEL_TOKEN en .env','No requiere abrir puertos WAN','Réplicas documentadas']},
+      {id:'nginx', x:565, y:82, w:145, h:64, status:'active', title:'app-frontend', subtitle:'Angular + Nginx', meta:'Interno :80 · localhost :8081', details:'Sirve la SPA y reenvía /api al backend. En laboratorio usa otra CSP.', controls:['Proxy /api → backend','Headers web','cap_drop ALL + capacidades mínimas']},
+      {id:'api', x:755, y:82, w:150, h:64, status:'active', title:'app-backend', subtitle:'Express API', meta:'Interno :3000 · localhost :3000', details:'Ejecuta autenticación, autorización por propietario/rol, validaciones y firma del webhook.', controls:['JWT','Rol admin','BOLA corregido en alcance probado','HMAC webhook','Rate limit por IP real (trust proxy)']},
+      {id:'proxy', x:950, y:82, w:130, h:64, status:'partial', title:'HAProxy', subtitle:'Alias postgres', meta:'localhost :5465 · stats :7000', details:'Punto único de entrada a PostgreSQL para el backend.', controls:['Health checks','Backend no conoce nodos','Puerto local solamente']},
+      {id:'patroni', x:1090, y:70, w:90, h:88, status:'partial', title:'Patroni', subtitle:'node1-3 + etcd', meta:'PostgreSQL 18', details:'Clúster HA con replicación y etcd. La réplica no reemplaza backups.', controls:['Replicación','Failover','Backups/restauración pendientes de ensayo']},
+      {id:'access', x:380, y:230, w:135, h:64, status:'partial', title:'Auth servicio', subtitle:'Cuentas propias', meta:'Sin Cloudflare Access', details:'Decisión del grupo: no hay capa de Access; GLPI, Nextcloud, n8n y Grafana exigen sus propias credenciales. La fortaleza de esas cuentas es la única barrera.', controls:['Login propio por servicio','Credenciales fuertes pendientes de revisión','Riesgo aceptado documentado']},
+      {id:'glpi', x:565, y:190, w:145, h:54, status:'partial', title:'GLPI', subtitle:'Tickets', meta:'Interno :80 · localhost :80', details:'Sistema de tickets para incidentes.', controls:['Auth propia de GLPI','Flujo de incidente pendiente']},
+      {id:'nextcloud', x:565, y:260, w:145, h:54, status:'partial', title:'Nextcloud', subtitle:'Documentación', meta:'Interno :80 · localhost :8082', details:'Repositorio documental del equipo.', controls:['Auth propia de Nextcloud','Credenciales por canal privado']},
+      {id:'n8n', x:565, y:330, w:145, h:54, status:'partial', title:'n8n', subtitle:'Automatización', meta:'Interno :5678 · localhost :5678', details:'Automatizaciones e integraciones de incidentes.', controls:['Auth propia de n8n','Sandbox privilegiado pendiente de revisión']},
+      {id:'monitor', x:565, y:400, w:145, h:54, status:'partial', title:'Grafana', subtitle:'grafana.hia-26.com', meta:'Interno :3000 · localhost :3001', details:'Único panel de monitoreo publicado; Prometheus queda interno.', controls:['Auth propia de Grafana','Credenciales débiles a revisar']},
+      {id:'prometheus', x:755, y:260, w:150, h:64, status:'partial', title:'Prometheus', subtitle:'Métricas', meta:'Interno :9090 · localhost :9090 · sin publicación', details:'Recolecta métricas del stack. No se publica por dominio: solo es alcanzable dentro de redtpfinal y a través de Grafana.', controls:['Reglas de alerta','Sin hostname público','Datos operativos']},
+      {id:'exporters', x:950, y:390, w:130, h:64, status:'partial', title:'Exporters', subtitle:'postgres + cAdvisor', meta:'Métricas internas', details:'Exponen métricas de nodos PostgreSQL y contenedores.', controls:['Solo red interna','Imágenes latest pendientes']},
+      {id:'alertmanager', x:950, y:260, w:130, h:64, status:'pending', title:'Alertmanager', subtitle:'Alertas', meta:'Interno :9093 · localhost :9093', details:'Gestiona alertas generadas por Prometheus.', controls:['Integración a revisar','Flujo n8n/GLPI pendiente']},
+      {id:'backup', x:1090, y:270, w:90, h:64, status:'pending', title:'Backup', subtitle:'postgres:18', meta:'Servicio interno', details:'Espacio para ejecutar respaldos. Falta evidencia de restauración.', controls:['Restauración descartable pendiente','Réplica ≠ backup']}
+    ],
+    edges: [
+      ['internet','cf','HTTPS'],['cf','tunnel','tunnel'],['tunnel','nginx','app'],
+      ['nginx','api','/api'],['api','proxy','SQL'],['proxy','patroni','5432'],
+      ['mp','cf','POST'],['tunnel','access','route'],['access','glpi','glpi'],
+      ['access','nextcloud','docs'],['access','n8n','n8n'],['access','monitor','metrics'],
+      ['patroni','exporters','metrics'],['exporters','prometheus','scrape'],
+      ['api','prometheus','metrics'],['prometheus','alertmanager','alerts'],
+      ['alertmanager','n8n','event'],['patroni','backup','backup']
+    ],
+    flows: {
+      app: {
+        label:'Usuario → app',
+        nodes:['internet','cf','tunnel','nginx','api','proxy','patroni'],
+        edges:[['internet','cf'],['cf','tunnel'],['tunnel','nginx'],['nginx','api'],['api','proxy'],['proxy','patroni']],
+        steps:['El usuario entra por HTTPS al dominio público.','Cloudflare termina TLS y entrega al named tunnel.','cloudflared resuelve app-frontend dentro de Docker.','Nginx sirve Angular y envía /api al backend.','Backend valida JWT, rol y propiedad antes de consultar datos.','Backend entra a PostgreSQL solo por HAProxy.']
+      },
+      access: {
+        label:'Equipo → paneles',
+        nodes:['internet','cf','tunnel','access','glpi','nextcloud','n8n','monitor'],
+        edges:[['internet','cf'],['cf','tunnel'],['tunnel','access'],['access','glpi'],['access','nextcloud'],['access','n8n'],['access','monitor']],
+        steps:['El integrante abre un hostname administrativo.','Cloudflare termina TLS y el túnel entrega al servicio interno.','Cada panel exige su propia cuenta: GLPI, Nextcloud, n8n y Grafana.','No hay capa de Access: la fortaleza de esas credenciales es la barrera (riesgo aceptado).']
+      },
+      payment: {
+        label:'Webhook pago',
+        nodes:['mp','cf','tunnel','nginx','api','proxy','patroni'],
+        edges:[['mp','cf'],['cf','tunnel'],['tunnel','nginx'],['nginx','api'],['api','proxy'],['proxy','patroni']],
+        steps:['Mercado Pago envía POST público al webhook.','El endpoint no usa JWT: valida x-signature y x-request-id.','Si la firma y el timestamp son válidos, responde rápido.','Después consulta el pago real y aplica estado/idempotencia.','Persistir el pago requiere pasar por HAProxy al clúster.']
+      },
+      observe: {
+        label:'Métricas/alertas',
+        nodes:['api','patroni','exporters','prometheus','monitor','alertmanager','n8n'],
+        edges:[['api','prometheus'],['patroni','exporters'],['exporters','prometheus'],['prometheus','alertmanager'],['alertmanager','n8n']],
+        steps:['Los exporters publican métricas internas.','Prometheus recolecta y evalúa reglas.','Alertmanager agrupa alertas.','n8n debería convertir eventos en tickets/notificación; el flujo sigue pendiente.']
+      }
+    }
+  },
+
+  lab: {
+    title: 'Laboratorio H24 aislado',
+    zones: [
+      {x: 190, y: 35, w: 735, h: 160, label: 'entry: solo Nginx publica localhost:9081'},
+      {x: 390, y: 35, w: 535, h: 420, label: 'isolated · internal:true · backend/base sin salida'}
+    ],
+    nodes: [
+      {id:'browser', x:25, y:85, w:130, h:64, type:'external', status:'active', title:'Navegador tester', subtitle:'localhost solamente', meta:'http://127.0.0.1:9081', details:'Entrada única del laboratorio.', controls:['Sin dominio público','Sin Cloudflare','Perfil de navegador separado']},
+      {id:'verify', x:25, y:265, w:130, h:64, type:'external', status:'active', title:'verify.py', subtitle:'Runner local', meta:'Matrices H24', details:'Ejecuta verificación base, autorización, SQLi y Mercado Pago simulado.', controls:['Código 2 si falla','Evidencia JSON sin credenciales','Fixtures marcados y limpiados']},
+      {id:'nginx-lab', x:220, y:85, w:145, h:64, status:'active', title:'Nginx H24', subtitle:'Frontend + proxy', meta:'127.0.0.1:9081 → :80', details:'Único contenedor conectado a entry e isolated. Bloquea Google e IA.', controls:['CSP local','503 IA/Google','Proxy fijo a backend']},
+      {id:'api-lab', x:430, y:85, w:150, h:64, status:'active', title:'Backend H24', subtitle:'Código real', meta:'Interno :3000 · sin puerto host', details:'Mismo backend, con adaptadores de prueba montados de solo lectura.', controls:['JWT local','Autorización real','HMAC real','Sin salida TCP verificada']},
+      {id:'db-lab', x:640, y:85, w:145, h:64, status:'active', title:'PostgreSQL 18.6', subtitle:'h24_security_test', meta:'Interno :5432 · sin puerto host', details:'Base y volumen propios. Usuario app sin superusuario.', controls:['Volumen separado','Credenciales locales','internal:true']},
+      {id:'calendar', x:430, y:235, w:150, h:64, status:'active', title:'Calendar simulado', subtitle:'h24-simulated-*', meta:'Sin invitaciones reales', details:'Devuelve IDs falsos y no envía correos ni Meet reales.', controls:['Adaptador montado ro','Sin credenciales Google']},
+      {id:'mp-sim', x:640, y:235, w:145, h:64, status:'active', title:'Mercado Pago simulado', subtitle:'Checkout local', meta:'Sin MP_ACCESS_TOKEN', details:'Devuelve init_point local y marca webhooks en auditoría.', controls:['Controlador real','Firma HMAC real','Sin llamadas al proveedor']},
+      {id:'ai-disabled', x:430, y:350, w:150, h:64, status:'active', title:'IA deshabilitada', subtitle:'503 / adaptador', meta:'Sin GROQ_API_KEY', details:'Nginx y adaptador bloquean chat/IA en el laboratorio.', controls:['503 explícito','Sin credenciales IA']},
+      {id:'evidence', x:840, y:265, w:145, h:64, status:'active', title:'Evidencias', subtitle:'JSON + docs', meta:'security-test/*.json', details:'Resultados reproducibles sin passwords ni JWT.', controls:['commit + imagen','fixtures_cleaned','sin secretos']}
+    ],
+    edges: [
+      ['browser','nginx-lab','HTTP'],['nginx-lab','api-lab','/api'],['api-lab','db-lab','SQL'],
+      ['verify','nginx-lab','HTTP'],['verify','evidence','JSON'],['api-lab','calendar','stub'],
+      ['api-lab','mp-sim','stub'],['api-lab','ai-disabled','disabled'],['mp-sim','db-lab','audit']
+    ],
+    flows: {
+      base: {
+        label:'Entrada aislada',
+        nodes:['browser','nginx-lab','api-lab','db-lab'],
+        edges:[['browser','nginx-lab'],['nginx-lab','api-lab'],['api-lab','db-lab']],
+        steps:['El único puerto publicado es 127.0.0.1:9081.','Nginx conecta entry e isolated.','Backend y base quedan dentro de internal:true.','Se verificó que backend no llega a Internet ni al receptor del host.']
+      },
+      auth: {
+        label:'Prueba autorización',
+        nodes:['verify','nginx-lab','api-lab','db-lab','evidence'],
+        edges:[['verify','nginx-lab'],['nginx-lab','api-lab'],['api-lab','db-lab'],['verify','evidence']],
+        steps:['verify.py hace login con cuentas ficticias.','Crea fixtures marcados para otro usuario.','Cambia IDs y compara status + estado real en base.','Limpia fixtures y guarda authorization-results.json.']
+      },
+      paymentLab: {
+        label:'Webhook simulado',
+        nodes:['verify','nginx-lab','api-lab','mp-sim','db-lab','evidence'],
+        edges:[['verify','nginx-lab'],['nginx-lab','api-lab'],['api-lab','mp-sim'],['mp-sim','db-lab'],['verify','evidence']],
+        steps:['La prueba genera firma HMAC local.','Backend valida headers antes de procesar.','El adaptador simulado no llama al proveedor.','La marca llega a auditoría y el resultado queda en mercadopago-results.json.']
+      },
+      sqli: {
+        label:'SQLi controlado',
+        nodes:['verify','nginx-lab','api-lab','db-lab','evidence'],
+        edges:[['verify','nginx-lab'],['nginx-lab','api-lab'],['api-lab','db-lab'],['verify','evidence']],
+        steps:['Se envían payloads no destructivos a rutas/filtros seleccionados.','Se miden tiempos y respuestas.','Se comparan recuentos antes/después.','Resultado actual: 37/37 en sqli-results.json.']
+      }
+    }
+  }
+};
+
+const state = {env: 'production', flow: 'app'};
+const svg = document.getElementById('diagram');
+const details = document.getElementById('details');
+const flowButtons = document.getElementById('flowButtons');
+
+function nodeById(env, id) {
+  return architectures[env].nodes.find(node => node.id === id);
+}
+function edgeKey(edge) { return `${edge[0]}>${edge[1]}`; }
+function edgePath(a, b) {
+  let x1 = a.x + a.w;
+  let y1 = a.y + a.h / 2;
+  let x2 = b.x;
+  let y2 = b.y + b.h / 2;
+  if (b.x < a.x) {
+    x1 = a.x;
+    x2 = b.x + b.w;
+  }
+  if (Math.abs(b.y - a.y) > 130 && Math.abs((b.x + b.w / 2) - (a.x + a.w / 2)) < 80) {
+    x1 = a.x + a.w / 2;
+    y1 = a.y + a.h;
+    x2 = b.x + b.w / 2;
+    y2 = b.y;
+  }
+  const midX = (x1 + x2) / 2;
+  return {d: `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`, x: midX, y: (y1 + y2) / 2 - 6};
+}
+function statusLabel(status) {
+  return {active:'Verificado', partial:'Parcial', pending:'Pendiente'}[status] || 'Pendiente';
+}
+function renderFlowButtons() {
+  const flows = architectures[state.env].flows;
+  flowButtons.innerHTML = Object.entries(flows).map(([id, flow]) =>
+    `<button type="button" data-flow="${id}" class="${state.flow === id ? 'active' : ''}">${esc(flow.label)}</button>`
+  ).join('');
+  flowButtons.querySelectorAll('button').forEach(button => {
+    button.addEventListener('click', () => {
+      state.flow = button.dataset.flow;
+      render();
+    });
+  });
+}
+function renderDiagram() {
+  const arch = architectures[state.env];
+  const flow = arch.flows[state.flow];
+  const activeEdges = new Set(flow.edges.map(edgeKey));
+  const activeNodes = new Set(flow.nodes);
+  const zones = arch.zones.map(zone =>
+    `<g><rect class="zone" x="${zone.x}" y="${zone.y}" width="${zone.w}" height="${zone.h}" rx="18"></rect>
+     <text class="zone-label" x="${zone.x + 14}" y="${zone.y + 22}">${esc(zone.label)}</text></g>`
+  ).join('');
+  const edges = arch.edges.map(edge => {
+    const a = nodeById(state.env, edge[0]);
+    const b = nodeById(state.env, edge[1]);
+    const path = edgePath(a, b);
+    const active = activeEdges.has(edgeKey(edge));
+    return `<path class="edge ${active ? 'active' : ''}" d="${path.d}"></path>
+            <text class="edge-label" x="${path.x}" y="${path.y}" text-anchor="middle">${esc(edge[2] || '')}</text>`;
+  }).join('');
+  const nodes = arch.nodes.map(node => {
+    const active = activeNodes.has(node.id);
+    const titleParts = node.title.split(' ');
+    const titleY = node.y + 23;
+    const title = titleParts.length > 2
+      ? `${esc(titleParts.slice(0, -1).join(' '))}<tspan x="${node.x + node.w / 2}" dy="14">${esc(titleParts.at(-1))}</tspan>`
+      : esc(node.title);
+    return `<g class="node ${node.type || ''} status-${node.status} ${active ? 'active' : ''}" data-node="${node.id}" tabindex="0" role="button" aria-label="${esc(node.title)}">
+      <rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="14"></rect>
+      <text x="${node.x + node.w / 2}" y="${titleY}" text-anchor="middle">${title}</text>
+      <text class="sub" x="${node.x + node.w / 2}" y="${node.y + node.h - 14}" text-anchor="middle">${esc(node.subtitle)}</text>
+    </g>`;
+  }).join('');
+  svg.innerHTML = `<defs><marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+    <path d="M0,0 L6,3 L0,6 Z" fill="#62d0ff"></path></marker></defs>${zones}${edges}${nodes}`;
+  svg.querySelectorAll('.node').forEach(element => {
+    const select = () => renderDetails(element.dataset.node);
+    element.addEventListener('click', select);
+    element.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        select();
+      }
+    });
+  });
+}
+function renderDetails(nodeId = null) {
+  const arch = architectures[state.env];
+  const flow = arch.flows[state.flow];
+  if (!nodeId) {
+    details.innerHTML = `<span class="status ${flow ? 'active' : 'pending'}">${esc(arch.title)}</span>
+      <h2>${esc(flow.label)}</h2>
+      <ol class="steps">${flow.steps.map(step => `<li>${esc(step)}</li>`).join('')}</ol>
+      <p>Tocá un nodo para ver puertos, controles y estado de validación.</p>`;
+    return;
+  }
+  const node = nodeById(state.env, nodeId);
+  details.innerHTML = `<span class="status ${node.status}">${statusLabel(node.status)}</span>
+    <h2>${esc(node.title)}</h2>
+    <p><strong>${esc(node.subtitle)}</strong></p>
+    <p><code>${esc(node.meta)}</code></p>
+    <p>${esc(node.details)}</p>
+    <h3>Controles / límites</h3>
+    <ul>${node.controls.map(control => `<li>${esc(control)}</li>`).join('')}</ul>`;
+}
+function render() {
+  renderFlowButtons();
+  renderDiagram();
+  renderDetails();
+}
+document.getElementById('btn-production').addEventListener('click', () => {
+  state.env = 'production';
+  state.flow = 'app';
+  document.getElementById('btn-production').classList.add('active');
+  document.getElementById('btn-lab').classList.remove('active');
+  render();
+});
+document.getElementById('btn-lab').addEventListener('click', () => {
+  state.env = 'lab';
+  state.flow = 'base';
+  document.getElementById('btn-lab').classList.add('active');
+  document.getElementById('btn-production').classList.remove('active');
+  render();
+});
+render();
+</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const Usuario = require('../models/usuario.model');
 const Categoria = require('../models/categoria.model');
 // const SolicitudAyuda = require('../models/solicitudes/solicitudAyuda.model');
@@ -9,7 +10,7 @@ const Precio = require('../models/precio.model');
 
 const contextService = {};
 
-contextService.buildContext = async (userMessage = '') => {
+contextService.buildContext = async (userMessage = '', userId = null) => {
 
     const msg = (userMessage || '').toLowerCase();
 
@@ -33,6 +34,7 @@ contextService.buildContext = async (userMessage = '') => {
     if (keywords_profesores.some(k => msg.includes(k))) {
         profesores = await Usuario.findAll({
             where: { rol: 'profesor', estado: 'activo' },
+            limit: 50,
             attributes: ['id', 'nombre', 'apellido', 'ubicacion', 'universidad', 'carrera'],
             include: [
                 {
@@ -66,10 +68,13 @@ contextService.buildContext = async (userMessage = '') => {
     //     });
     // }
 
-    // tutorías solo si la pregunta es sobre tutorías o clases
+    // tutorías solo si la pregunta es sobre tutorías o clases,
+    // y solo las del usuario autenticado: el chatbot no puede
+    // devolver tutorías ajenas si la API tampoco lo permite
     const keywords_tutorias = ['tutoria', 'tutoría', 'clase', 'sesion', 'sesión', 'reserva', 'agendar'];
-    if (keywords_tutorias.some(k => msg.includes(k))) {
+    if (userId && keywords_tutorias.some(k => msg.includes(k))) {
         tutorias = await Tutoria.findAll({
+            where: { [Op.or]: [{ alumnoId: userId }, { profesorId: userId }] },
             attributes: ['id', 'modalidad', 'precioAcordado', 'fechaHora', 'estado'],
             include: [
                 { model: Usuario, as: 'alumno', attributes: ['nombre', 'apellido'] },
@@ -83,8 +88,10 @@ contextService.buildContext = async (userMessage = '') => {
     // calificaciones solo si pregunta por reputación o calidad
     const keywords_calificaciones = ['calificacion', 'calificación', 'reputacion', 'reputación', 'mejor', 'recomendado', 'rating', 'puntaje'];
     if (keywords_calificaciones.some(k => msg.includes(k))) {
+        // sin 'comentario': es texto libre de usuarios y podría
+        // inyectar instrucciones dentro del system prompt
         calificaciones = await Calificacion.findAll({
-            attributes: ['tutoriaId', 'calificacion', 'comentario'],
+            attributes: ['tutoriaId', 'calificacion'],
             include: [{
                 model: Tutoria,
                 as: 'tutoria',

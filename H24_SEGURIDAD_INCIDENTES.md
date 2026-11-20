@@ -1,7 +1,8 @@
 # H24 / PT-33 — Seguridad y respuesta ante incidentes
 
 **Responsable:** MC. **Punto del TP:** 14. **Inicio de revisión:** 18/11/2026.
-**Estado:** en preparación; criterios de aceptación todavía no cerrados.
+**Estado:** laboratorio aislado preparado y verificado; pruebas completas y
+criterios de aceptación todavía no cerrados.
 
 ## Objetivo y alcance
 
@@ -56,14 +57,23 @@ La rama recupera documentación de seguridad sin fusionar el código antiguo:
 
 ### 2. Entorno aislado
 
-- [ ] Preparar proyecto Compose de pruebas con red, volúmenes y puertos propios.
-- [ ] Usar cuentas, credenciales y datos sintéticos; evitar conexiones a las bases
+- [x] Preparar proyecto Compose de pruebas con red, volúmenes y puertos propios.
+- [x] Usar cuentas, credenciales y datos sintéticos; evitar conexiones a las bases
   locales del equipo o a la instalación publicada.
-- [ ] No conectar el túnel público del equipo a las pruebas.
-- [ ] Desactivar o sustituir por receptores locales los envíos de correo,
+- [x] No conectar el túnel público del equipo a las pruebas.
+- [x] Desactivar o sustituir por receptores locales los envíos de correo,
   Calendar, pagos, servicios de IA y webhooks externos.
-- [ ] Registrar inventario inicial, límites de ejecución y forma de eliminar
+- [x] Registrar inventario inicial, límites de ejecución y forma de eliminar
   exclusivamente el entorno de pruebas.
+
+Implementación: [Compose independiente](compose.security-test.yaml) y
+[guía reproducible del laboratorio](security-test/README.md).
+La verificación de preparación está en `security-test/verify.py`: incluye
+salud, redes, salida TCP bloqueada del backend, montajes, cuentas sintéticas
+y controles básicos 401/403/200. No equivale a completar las pruebas del apartado 3.
+Nginx tiene una red de entrada adicional; la red interna protege backend y base.
+La CSP local y los adaptadores de integración difieren de producción: no usar
+estos resultados para afirmar seguridad de Google, Mercado Pago, IA o CSP pública.
 
 `localhost` por sí solo no garantiza aislamiento. No ejecutar escaneos activos
 contra la instalación compartida. Un análisis pasivo de navegación pública
@@ -73,9 +83,25 @@ debe documentarse por separado y con su alcance.
 
 - [ ] Revisar amenazas y vulnerabilidades anteriores con herramientas actuales.
 - [ ] Verificar autenticación y autorización por rol y por propietario del recurso.
-- [ ] Probar SQLi de bajo impacto sobre endpoints seleccionados del entorno aislado.
+- [x] Probar SQLi de bajo impacto sobre endpoints seleccionados del entorno aislado.
 - [ ] Verificar validación de entradas, errores, headers y límites de solicitudes.
 - [ ] Revisar secretos sin incorporar valores, tokens o contraseñas a los reportes.
+
+**Avance 18/11/2026:** ejecutada la prueba acotada de autorización con
+`python security-test/verify.py --authorization`. Se confirmaron y corrigieron
+**H24-AUTH-01** (tutorías ajenas), **H24-AUTH-02** (edición de perfil ajeno),
+**H24-AUTH-03** (horarios ajenos, incluida la ruta legacy), **H24-BFLA-01**
+(funciones de categorías sin autenticación ni rol) y **H24-AUTH-04**
+(solicitudes, respuestas y calificaciones ajenas). El retest integrado pasó
+**62/62** casos, con accesos indebidos rechazados y controles positivos
+conservados. Se limpiaron los recursos descartables. Además, la matriz SQLi
+controlada pasó **37/37** casos sobre rutas, filtros, búsquedas admin y login,
+sin ejecución inyectada ni cambios en las tablas. Mercado Pago quedó protegido
+con tipo de entidad explícito, autorización del pagador, URL configurable,
+firma HMAC del webhook e idempotencia; su simulación local pasó **13/13**
+casos. Queda integrar la rama `fix/PT-33-autorizacion-tutorias` y verificar
+tras despliegue; siguen pendientes la muestra de `/api/admin`, chat, auditoría
+y revisión de errores de validación observados durante SQLi.
 
 ### 4. Docker, infraestructura y CI/CD
 
@@ -84,7 +110,11 @@ debe documentarse por separado y con su alcance.
 - [ ] Inspeccionar permisos de Actions, secretos, dependencias de terceros y
   mecanismos de revisión/despliegue. Distinguir YAML de protecciones de rama
   configuradas en GitHub, que requieren verificación independiente.
-- [ ] Revisar configuración de publicación, confianza en proxy y Access.
+- [ ] Revisar configuración de publicación y confianza en proxy. Nota: Cloudflare
+  Access fue descartado por el grupo (cada servicio usa su propia
+  autenticación; `monitor.` reemplazado por `grafana.hia-26.com`, Prometheus
+  sin publicación). Verificar que las credenciales de cada panel sean fuertes
+  y únicas — son la única barrera ante acceso externo.
 - [ ] Revisar respaldo y recuperación como control ante incidentes; la
   replicación no sustituye un respaldo frente a borrados o corrupción lógica.
 
