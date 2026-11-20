@@ -13,12 +13,12 @@ const preference = new Preference(client);
 const payment = new Payment(client);
 
 async function crearPreferencia(idRespuesta) {
-    let tipo = 'ayuda';
-    let entidad = await RespuestaAyuda.findByPk(idRespuesta);
+    let tipo = 'tutoria';
+    let entidad = await Tutoria.findByPk(idRespuesta);
 
     if (!entidad) {
-        entidad = await Tutoria.findByPk(idRespuesta);
-        tipo = 'tutoria';
+        entidad = await RespuestaAyuda.findByPk(idRespuesta);
+        tipo = 'ayuda';
     }
 
     if (!entidad) {
@@ -59,6 +59,7 @@ async function crearPreferencia(idRespuesta) {
 
         external_reference: `${tipo}:${entidad.id}`,
 
+        //notification_url: "https://thesaurus-thong-doing.ngrok-free.dev/api/mercadopago/webhook",
         notification_url: "https://thesaurus-thong-doing.ngrok-free.dev/api/mercadopago/webhook",
 
         back_urls: backUrls

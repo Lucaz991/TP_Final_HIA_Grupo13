@@ -24,10 +24,20 @@ Este módulo implementa la solución de alta disponibilidad y tolerancia a fallo
     - Expone el panel de estadísticas en `http://localhost:7000/stats`.
     - Actúa con el alias de red `postgres` en la red `redtpfinal` para que el `backend`, `pgAdmin` y `postgres-exporter` se conecten de forma transparente sin exponer credenciales ni puertos directos.
 
+- **Arquitectura de Doble Red Docker (Segmentación y Aislamiento):**
+  - **`red-patroni` (`internal: true`):**
+    - Red interna sin salida a Internet ni comunicación con contenedores ajenos al clúster.
+    - Conecta exclusivamente los componentes de base de datos: `etcd`, `node1`, `node2`, `node3`, el balanceador `proxy` (HAProxy) y los tres exportadores de monitoreo `postgres-exporter-node1/2/3`.
+    - Garantiza que la replicación WAL y la sincronización de consenso etcd ocurran en un canal privado de alta velocidad sin colisiones de tráfico.
+  - **`redtpfinal` (Red bridge de la aplicación y servicios):**
+    - Conecta los servicios de nivel de usuario: `backend`, `frontend`, `pgAdmin`, `grafana`, `prometheus`, `alertmanager`, `glpi`, `nextcloud` y `n8n`.
+    - `proxy` (HAProxy) actúa como **puente de red** (Gateway) perteneciendo a ambas redes con el alias `postgres`, permitiendo que el backend y pgAdmin alcancen al líder sin tener acceso directo a la red privada `red-patroni`.
+
 - **Seguridad (Zero Exposure):**
   - **Ningún puerto de PostgreSQL (5432) se expone directamente al host de Windows**.
-  - Toda la comunicación de base de datos se mantiene aislada dentro de la red Docker privada `redtpfinal`.
-  - El único punto de entrada externo es el proxy seguro de HAProxy en el puerto `5465` (configurable vía `DB_PROXY_PORT`) y estadísticas en `7000`.
+  - Los 3 nodos de PostgreSQL corren en la red aislada `red-patroni`.
+  - El único punto de entrada transaccional para la aplicación es el alias `postgres:5432` provisto por HAProxy dentro de `redtpfinal`.
+  - Para acceso administrativo externo opcional, HAProxy expone el puerto `5465` (configurable vía `DB_PROXY_PORT`) y estadísticas en el puerto `7000`.
 
 ---
 
