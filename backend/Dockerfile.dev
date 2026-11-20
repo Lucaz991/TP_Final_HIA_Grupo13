@@ -1,0 +1,14 @@
+# Imagen de desarrollo para Backend (Node.js 20 con recarga automática)
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+EXPOSE 3000
+
+# Recarga automática ante cambios en el código fuente
+CMD ["node", "--watch", "index.js"]
