@@ -132,22 +132,49 @@ finally {
     $informe['segundos_totales'] =
         [math]::Round(((Get-Date) - $inicio).TotalSeconds, 3)
 
-    #$informe | ConvertTo-Json |
-        #Set-Content -LiteralPath $registro -Encoding UTF8
-    #Write-Host "Registro: $registro"
-
     $jsonPayload = $informe | ConvertTo-Json
     $jsonPayload | Set-Content -LiteralPath $registro -Encoding UTF8
     Write-Host "Registro: $registro"
 
     # --- ENVIAR RESULTADO A N8N ---
+$archivoEnv = Join-Path $proyecto '.env'
 
-    $webhookUrl = $env:BACKUP_HOST_WEBHOOK_URL
-    if (-not $webhookUrl) {
-        $webhookUrl = 'http://localhost:5678/webhook/backup-verificacion'
+    if (Test-Path $archivoEnv) {
+        Get-Content $archivoEnv | ForEach-Object {
+            if ($_ -match '^\s*([^#][^=]+?)\s*=\s*(.*)\s*$') {
+                $clave = $matches[1]
+                $valor = $matches[2].Trim('"').Trim("'")
+                if (-not (Get-Item "Env:$clave" -ErrorAction SilentlyContinue)) {
+                    [Environment]::SetEnvironmentVariable($clave, $valor, 'Process')
+                }
+            }
+        }
     }
+
+    $webhookUrl = if ($env:BACKUP_HOST_WEBHOOK_URL) {
+        $env:BACKUP_HOST_WEBHOOK_URL
+    } else {
+        'http://localhost:5678/webhook/backup-verificacion'
+    }
+
+    $webhookUser = $env:N8N_WEBHOOK_BACKUP_USER
+    $webhookPass = $env:N8N_WEBHOOK_BACKUP_PASS
+
     try {
-        Invoke-RestMethod -Uri $webhookUrl -Method Post -ContentType "application/json; charset=utf-8" -Body $jsonPayload | Out-Null
+        if (-not $webhookUser -or -not $webhookPass) {
+            throw "Faltan las credenciales de n8n en el archivo .env."
+        }
+
+        $credenciales = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("${webhookUser}:${webhookPass}")
+        )
+
+        Invoke-RestMethod -Uri $webhookUrl `
+            -Method Post `
+            -Headers @{ Authorization = "Basic $credenciales" } `
+            -ContentType "application/json; charset=utf-8" `
+            -Body $jsonPayload | Out-Null
+
         Write-Host "Notificado a n8n correctamente."
     }
     catch {
